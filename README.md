@@ -8,28 +8,50 @@ Tienda para mamá y peques: belleza, bebé y niños, ropa infantil, gomitas salu
 |---|---|
 | Marcado | HTML5 semántico, una sola página (`index.html`) |
 | Estilos | CSS plano con variables (`css/styles.css`), sin preprocesador ni framework |
-| Lógica | JavaScript vanilla (ES2020), sin dependencias ni paso de build |
+| Lógica | JavaScript vanilla (ES2020) en el navegador; funciones Node en `api/` |
 | Navegación | SPA con rutas por hash (`#/…`) |
 | Persistencia | `localStorage` (carrito, cupón, contador de pedidos) |
 | Fuentes | Google Fonts (Quicksand, Sacramento) |
-| Servidor local | `python -m http.server 5173` (ver `.claude/launch.json`) |
+| Hosting | Vercel (sitio estático + funciones en `api/`) |
+| Datos del catálogo y archivos | Vercel Blob (`store.json`, fotos y audios) |
 
-Para correr en local:
+Solo la tienda, sin panel: `python -m http.server 5173` (sin `/api`, el catálogo no carga). Para probar todo en local: `npm i -g vercel`, `vercel link`, `vercel env pull` y `vercel dev`.
 
-```bash
-python -m http.server 5173
-```
+## Panel de administración (`/admin/`)
 
-Luego abrir <http://localhost:5173>.
+| Sección | Qué permite |
+|---|---|
+| Productos | Crear, editar, duplicar, eliminar; precio, precio anterior, stock, etiqueta, edades, opciones (talla/color), descripción, cuidados; subir varias fotos (se reducen a 1400 px); reordenar arrastrando o con flechas; destacar en «Más vendidos» |
+| Categorías | Crear, renombrar, ordenar, eliminar; color, textos, columnas del menú desplegable y producto destacado |
+| Podcast | Episodios con título, fecha, duración, tema, producto mencionado y audio; reordenar; temas |
+| Ajustes | WhatsApp, redes, envío gratis, costos de envío, cupones, páginas de ayuda |
+
+### Cómo funciona
+
+- Los cambios se editan en el navegador y se aplican con **Guardar cambios** (`PUT /api/store`).
+- `store.json` vive en Vercel Blob. La tienda lo lee con `/api/data.js` (define `window.MV_CONFIG` y `window.MV_DATA`; caché de ~30 s). Si el Blob aún no existe, se usa `data/store.json` del repositorio como datos iniciales.
+- Fotos y audios se suben directo del navegador a Blob (`/api/upload` solo entrega un permiso firmado); en los datos se guarda la URL pública.
+- Cada guardado deja un respaldo en `backups/` del Blob (últimos 30).
+- Sesión: contraseña única (`ADMIN_PASSWORD`), cookie firmada `HttpOnly`/`SameSite=Strict` de 12 h; las escrituras exigen además la cabecera `X-Requested-With`.
+
+### Puesta en marcha en Vercel (una vez)
+
+1. Importar el repositorio en Vercel.
+2. Storage → Create → **Blob** (acceso público) y conectarlo al proyecto: agrega `BLOB_READ_WRITE_TOKEN` solo.
+3. Settings → Environment Variables: `ADMIN_PASSWORD` (tu contraseña) y `SESSION_SECRET` (texto largo aleatorio).
+4. Desplegar y entrar a `https://<tu-dominio>/admin/`.
 
 ## Estructura
 
 ```
 index.html        Estructura base: cabecera, nav, <main id="app">, pie, menú móvil
 css/styles.css    Tokens, componentes y responsive
-js/config.js      Ajustes editables: WhatsApp, redes, cupones, envío gratis
-js/data.js        Catálogo, megamenú, episodios, envíos, pagos, textos de ayuda
 js/app.js         Router, páginas, carrito, checkout, podcast, filtros
+api/              Funciones de Vercel: data.js (público), login, logout, session, store, upload; _lib.js (utilidades)
+admin/            Panel de administración (index.html, admin.css, admin.js)
+data/store.json   Datos iniciales del catálogo (semilla); luego manda el Blob
+vercel.json       Incluye data/store.json en las funciones
+package.json      Dependencia @vercel/blob
 ```
 
 ## Rutas
@@ -93,8 +115,8 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 
 ## Configuración pendiente
 
-- `js/config.js`: ya tiene WhatsApp (+51 940 395 933), Instagram (@mama.virtuosa3110) y TikTok (@mama.virtuosa). Faltan Facebook, Spotify, Apple y YouTube.
-- `js/data.js`: stock, descripciones y textos de cuidados son de ejemplo. Para fotos reales agregar `img: 'img/archivo.jpg'` al producto; para audio real agregar `audio: 'archivo.mp3'` al episodio.
+- Ajustes (panel → Ajustes): ya tiene WhatsApp (+51 940 395 933), Instagram (@mama.virtuosa3110) y TikTok (@mama.virtuosa). Faltan Facebook, Spotify, Apple y YouTube.
+- Stock, descripciones y textos de cuidados son de ejemplo: edítalos en el panel. Fotos reales y audio de episodios se suben desde el panel.
 
 ## Límites actuales (sin backend)
 

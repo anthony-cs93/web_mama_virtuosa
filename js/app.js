@@ -59,12 +59,13 @@ const ui = {
 };
 
 /* ---------- piezas de HTML ---------- */
-const imgOrLabel = (p, label) => p.img
-  ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy">`
+const pics = p => (p.imgs && p.imgs.length ? p.imgs : p.img ? [p.img] : []);
+const imgOrLabel = (p, label) => pics(p).length
+  ? `<img src="${esc(pics(p)[0])}" alt="${esc(p.name)}" loading="lazy">`
   : `<span aria-hidden="true">${label}</span>`;
 
 const card = (p, withCat) => `<a class="card" href="#/producto/${p.id}">
-  <div class="ph" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}<span class="tag">${esc(p.tag)}</span></div>
+  <div class="ph" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
   <div class="nm">${esc(p.name)}</div>${withCat ? `<div class="ct">${esc(p.cat)}</div>` : ''}
   <div class="pr"><b>${fmt(p.price)}</b>${p.old ? ` <s>${fmt(p.old)}</s>` : ''}</div></a>`;
 
@@ -77,11 +78,12 @@ const CAT_ICONS = {
   'Ropa infantil': '<path d="M19 5c0 4 1.5 7 5 7s5-3 5-7"/><path d="M19 12l-3 11-8 18h32l-8-18-3-11"/><path d="M16 23h16"/>',
   'Gomitas saludables': '<circle cx="16" cy="9" r="3.5"/><circle cx="32" cy="9" r="3.5"/><circle cx="24" cy="15" r="8"/><path d="M16 25c-3 2-4 8-3 14 1 3 4 5 7 5h8c3 0 6-2 7-5 1-6 0-12-3-14"/><path d="M21 14v.5M27 14v.5M22 18c1 1 3 1 4 0" /><path d="M10 28l3 3M38 28l-3 3"/>'
 };
-const catIcon = c => `<svg class="cat-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${CAT_ICONS[c] || ''}</svg>`;
+const CAT_ICON_DEFAULT = '<rect x="9" y="19" width="30" height="22" rx="3"/><path d="M6 13h36v6H6zM24 13v28"/><path d="M24 13c-4-8-12-6-10-2 1 2 6 2 10 2zM24 13c4-8 12-6 10-2-1 2-6 2-10 2z"/>';
+const catIcon = c => `<svg class="cat-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${CAT_ICONS[c] || CAT_ICON_DEFAULT}</svg>`;
 
 /* ---------- inicio ---------- */
 function pageHome() {
-  const best = [1, 5, 4, 7].map(P);
+  const best = (D.featured || []).map(P).filter(p => p && p.stock > 0).slice(0, 8);
   return {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
@@ -210,7 +212,9 @@ function pageSearch(q) {
 function pageProduct(id) {
   const p = P(+id); if (!p) return pageNotFound();
   ui.pdp = { qty: 1, opt: p.opt ? p.opt.values[0] : null, img: 0 };
-  const related = [1, 5, 4, 7, 6, 3].filter(i => i !== p.id).slice(0, 4).map(P);
+  const others = D.products.filter(o => o.id !== p.id && o.stock > 0);
+  const related = [...others.filter(o => o.cat === p.cat), ...others.filter(o => o.cat !== p.cat)].slice(0, 4);
+  const gal = pics(p), n = gal.length || 3;
   const stockTxt = p.stock <= 10 ? `Stock disponible: ${p.stock} unidades` : 'Stock disponible';
   const qtyCtl = cls => `<div class="qty ${cls || ''}"><button type="button" data-act="pdp-qty" data-d="-1" aria-label="Menos">–</button><output data-qty-out aria-live="polite">1</output><button type="button" data-act="pdp-qty" data-d="1" aria-label="Más">+</button></div>`;
   const html = `
@@ -218,12 +222,12 @@ function pageProduct(id) {
   ${crumbs([['Inicio', '#/'], [p.cat, catHref(p.cat)], [p.name]])}
   <div class="pdp-grid">
     <div class="thumbs">
-      ${[0, 1, 2].map(i => `<button class="thumb ph" data-act="pdp-img" data-i="${i}" style="background:${p.tone}" aria-label="Ver foto ${i + 1}"></button>`).join('')}
+      ${Array.from({ length: n }, (_, i) => `<button class="thumb ph" data-act="pdp-img" data-i="${i}" style="background:${p.tone}" aria-label="Ver foto ${i + 1}">${gal[i] ? `<img src="${esc(gal[i])}" alt="">` : ''}</button>`).join('')}
       <button class="thumb video" data-act="toast" data-msg="El video estará disponible pronto">▶ video</button>
     </div>
     <div>
-      <div class="main-img ph" id="main-img" style="background:${p.tone}">${p.img ? `<img src="${esc(p.img)}" alt="${esc(p.name)}">` : '<span id="main-lbl">[foto principal]</span>'}</div>
-      <div class="dots" aria-label="Fotos">${[0, 1, 2].map(i => `<button data-act="pdp-img" data-i="${i}" aria-label="Foto ${i + 1}"></button>`).join('')}</div>
+      <div class="main-img ph" id="main-img" style="background:${p.tone}">${gal.length ? `<img id="main-pic" src="${esc(gal[0])}" alt="${esc(p.name)}">` : '<span id="main-lbl">[foto principal]</span>'}</div>
+      <div class="dots" aria-label="Fotos">${Array.from({ length: n }, (_, i) => i).map(i =>`<button data-act="pdp-img" data-i="${i}" aria-label="Foto ${i + 1}"></button>`).join('')}</div>
     </div>
     <div class="info">
       <div class="eyebrow">${esc(p.cat)}</div>
@@ -255,6 +259,8 @@ function syncPDP() {
   $$('.thumbs .thumb:not(.video)').forEach((t, i) => t.classList.toggle('on', i === ui.pdp.img));
   $$('.dots button').forEach((t, i) => t.classList.toggle('on', i === ui.pdp.img));
   const l = $('#main-lbl'); if (l) l.textContent = '[foto principal ' + (ui.pdp.img + 1) + ']';
+  const m = $('#main-pic'), g = pics(P(currentProductId()) || {});
+  if (m && g[ui.pdp.img]) m.src = g[ui.pdp.img];
 }
 function currentProductId() { return +parseHash()[1]; }
 
@@ -272,7 +278,7 @@ function cartView() {
   <div>
     <div class="free-bar" role="status">${need > 0 ? `Te faltan <b>${fmt(need)}</b> para envío gratis en Lima` : '¡Tienes envío gratis en Lima!'}<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>
     <div class="lines">${cart.map((l, i) => { const p = P(l.id); return `<div class="line">
-      <div class="ph" style="background:${p.tone}">${p.img ? `<img src="${esc(p.img)}" alt="">` : ''}</div>
+      <div class="ph" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
       <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u</div>
         <button class="link ul" data-act="line-rm" data-i="${i}">Quitar</button></div>
       <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos">–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más">+</button></div>
@@ -340,7 +346,7 @@ function choiceHTML(kind, map, selected, disabledKeys = []) {
 }
 function summaryHTML(inner) {
   const st = ui.co, t = totals(st.ship);
-  const rows = cart.map(l => { const p = P(l.id); return `<div class="sum-line"><div class="ph" style="background:${p.tone}">${p.img ? `<img src="${esc(p.img)}" alt="">` : ''}</div>
+  const rows = cart.map(l => { const p = P(l.id); return `<div class="sum-line"><div class="ph" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
     <div class="t"><b>${esc(p.name)}</b><br><span class="muted">${l.opt ? esc(l.opt) + ' · ' : ''}Cant. ${l.qty}</span></div><b>${fmt(p.price * l.qty)}</b></div>`; }).join('');
   return `${inner ? '' : '<h2>Resumen del pedido</h2>'}${rows}
     <div class="srow" style="border-top:1px solid var(--line);padding-top:12px"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
@@ -411,7 +417,7 @@ const au = new Audio(); let tickTimer = null;
 const epDur = i => D.episodes[i].secs;
 function playerSync() {
   const i = ui.playing !== null ? ui.playing : 0, el = ui.elapsed[i] || 0;
-  const t = $('#pl-title'); if (!t) return;
+  const t = $('#pl-title'); if (!t || !D.episodes[i]) return;
   t.textContent = D.episodes[i].t;
   $('#pl-bar').style.width = (el / epDur(i) * 100) + '%';
   $('#pl-time').textContent = mmss(el) + ' / ' + mmss(epDur(i));
@@ -435,7 +441,7 @@ function togglePlay(i) {
 function pageEpisodesList() {
   const list = D.episodes.map((e, i) => ({ ...e, i })).filter(e => ui.topic === 'Todos' || e.topic === ui.topic);
   return list.map(e => `<div class="ep"><div class="cv"></div>
-    <div><h3>${esc(e.t)}</h3><div class="meta">${esc(e.meta)} · ${esc(e.topic)}</div><a href="#/producto/${e.prod}">Productos mencionados →</a></div>
+    <div><h3>${esc(e.t)}</h3><div class="meta">${esc(e.meta)} · ${esc(e.topic)}</div>${P(e.prod) ? `<a href="#/producto/${e.prod}">Productos mencionados →</a>` : ''}</div>
     <button class="play" data-act="play" data-i="${e.i}" aria-pressed="false" aria-label="Reproducir ${esc(e.t)}">▶</button></div>`).join('') ||
     '<p class="muted" style="padding:24px 0">Aún no hay episodios en este tema.</p>';
 }
@@ -448,7 +454,7 @@ function pagePodcast() {
     <div class="ph cover"><span aria-hidden="true">[portada]</span></div>
     <div><div class="eyebrow">Podcast</div><h1>Mamá Virtuosa</h1>
       <p>Conversaciones sobre crianza, lactancia, salud y belleza para mamás reales. Un episodio nuevo cada semana.</p>
-      <div class="ctas"><button class="btn" data-act="play" data-i="0">▶ Último episodio</button>${ext('Spotify')}${ext('Apple')}${ext('YouTube')}</div></div>
+      <div class="ctas">${D.episodes.length ? '<button class="btn" data-act="play" data-i="0">▶ Último episodio</button>' : ''}${ext('Spotify')}${ext('Apple')}${ext('YouTube')}</div></div>
   </section>
   <div class="topics" role="group" aria-label="Temas">${D.topics.map(t => `<button class="pill ${t === ui.topic ? 'on' : ''}" data-act="topic" data-t="${t}" aria-pressed="${t === ui.topic}">${t}</button>`).join('')}</div>
   <div id="eps">${pageEpisodesList()}</div>
@@ -478,13 +484,13 @@ function buildNav() {
 }
 function openMega(k) {
   const m = D.mega[k], box = $('#mega');
-  if (!m) { closeMega(); return; }
+  if (!m || !m.cols.length) { closeMega(); return; }
   if (ui.mega === k) return;
   ui.mega = k;
-  const p = P(m.promo.id);
+  const p = m.promo && P(m.promo.id);
   box.innerHTML = m.cols.map(c => `<div><h3>${esc(c.t)}</h3><ul>${c.l.map(l => `<li><a href="${catHref(k, l)}">${esc(l)}</a></li>`).join('')}</ul></div>`).join('') +
-    `<a class="promo-card" href="#/producto/${p.id}" style="background:${p.tone}"><div class="ph" aria-hidden="true">[foto destacada]</div>
-      <div class="txt"><div class="eyebrow">Destacado</div><div class="name">${esc(p.name)}</div><div class="sub">${esc(m.promo.s)}</div></div></a>`;
+    (!p ? '' : `<a class="promo-card" href="#/producto/${p.id}" style="background:${p.tone}"><div class="ph" aria-hidden="true">[foto destacada]</div>
+      <div class="txt"><div class="eyebrow">Destacado</div><div class="name">${esc(p.name)}</div><div class="sub">${esc(m.promo.s)}</div></div></a>`);
   box.hidden = false;
   $$('#nav-row a').forEach(a => a.setAttribute('aria-expanded', a.dataset.mega === k ? 'true' : 'false'));
 }

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Panel · Mamá Virtuosa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Sacramento&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+<main id="login" class="login" hidden>
+  <form id="login-form" class="login-card" autocomplete="on">
+    <div class="script">Mamá Virtuosa</div>
+    <h1 id="login-title">Panel de administración</h1>
+    <p class="muted" id="login-sub"></p>
+    <label class="fld"><span>Contraseña</span>
+      <input type="password" id="login-pw" autocomplete="current-password" required></label>
+    <div class="form-err" id="login-err" role="alert"></div>
+    <button class="btn" type="submit" id="login-btn">Entrar</button>
+  </form>
+</main>
+
+<div id="shell" hidden>
+  <header class="top">
+    <div class="brand"><span class="script">Mamá Virtuosa</span><span class="badge">Panel</span></div>
+    <nav class="tabs" id="tabs" aria-label="Secciones">
+      <button data-tab="productos" class="on">Productos</button>
+      <button data-tab="categorias">Categorías</button>
+      <button data-tab="podcast">Podcast</button>
+      <button data-tab="ajustes">Ajustes</button>
+    </nav>
+    <div class="top-actions">
+      <span class="dirty" id="dirty" hidden>● Cambios sin guardar</span>
+      <a class="btn ghost sm" href="/" target="_blank" rel="noopener">Ver tienda ↗</a>
+      <button class="btn sm" id="save" disabled>Guardar cambios</button>
+      <button class="link" id="logout">Salir</button>
+    </div>
+  </header>
+  <main class="wrap" id="view"></main>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="admin.js"></script>
+</body>
+</html>
