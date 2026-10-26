@@ -93,7 +93,7 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 
 ## Configuración pendiente
 
-- `js/config.js`: número real de WhatsApp (hoy es de relleno) y enlaces de Instagram, TikTok, Facebook, Spotify, Apple y YouTube.
+- `js/config.js`: ya tiene WhatsApp (+51 940 395 933), Instagram (@mama.virtuosa3110) y TikTok (@mama.virtuosa). Faltan Facebook, Spotify, Apple y YouTube.
 - `js/data.js`: stock, descripciones y textos de cuidados son de ejemplo. Para fotos reales agregar `img: 'img/archivo.jpg'` al producto; para audio real agregar `audio: 'archivo.mp3'` al episodio.
 
 ## Límites actuales (sin backend)

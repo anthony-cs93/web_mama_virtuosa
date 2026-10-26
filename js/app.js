@@ -70,6 +70,15 @@ const card = (p, withCat) => `<a class="card" href="#/producto/${p.id}">
 
 const crumbs = list => `<nav class="crumbs" aria-label="Ruta">${list.map(([l, h]) => h ? `<a href="${h}">${esc(l)}</a>` : `<span aria-current="page">${esc(l)}</span>`).join(' › ')}</nav>`;
 
+/* Iconos de categoría (trazo, 48×48) */
+const CAT_ICONS = {
+  'Belleza': '<rect x="15" y="28" width="18" height="15" rx="2.5"/><rect x="17.5" y="21" width="13" height="7" rx="1.5"/><path d="M19 21v-9l10-5v14"/><path d="M36 8v7M32.5 11.5h7M10 14v4M8 16h4"/>',
+  'Bebé y niños': '<path d="M20 12c0-4 2-7 4-7s4 3 4 7"/><rect x="17" y="12" width="14" height="4" rx="1.5"/><rect x="15" y="16" width="18" height="27" rx="5"/><path d="M24 25h5M24 31h5M24 37h5"/>',
+  'Ropa infantil': '<path d="M19 5c0 4 1.5 7 5 7s5-3 5-7"/><path d="M19 12l-3 11-8 18h32l-8-18-3-11"/><path d="M16 23h16"/>',
+  'Gomitas saludables': '<circle cx="16" cy="9" r="3.5"/><circle cx="32" cy="9" r="3.5"/><circle cx="24" cy="15" r="8"/><path d="M16 25c-3 2-4 8-3 14 1 3 4 5 7 5h8c3 0 6-2 7-5 1-6 0-12-3-14"/><path d="M21 14v.5M27 14v.5M22 18c1 1 3 1 4 0" /><path d="M10 28l3 3M38 28l-3 3"/>'
+};
+const catIcon = c => `<svg class="cat-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${CAT_ICONS[c] || ''}</svg>`;
+
 /* ---------- inicio ---------- */
 function pageHome() {
   const best = [1, 5, 4, 7].map(P);
@@ -89,7 +98,7 @@ function pageHome() {
 <section class="section" aria-labelledby="h-cat">
   <h2 class="sec-title" id="h-cat">Compra por categoría</h2>
   <div class="cat-grid">${D.catOrder.map(c => `<a class="cat-card" href="${catHref(c)}">
-    <div class="ph" style="background:${D.catTone[c]}"><span aria-hidden="true">[foto]</span></div>
+    <div class="ph" style="background:${D.catTone[c]}">${catIcon(c)}</div>
     <div class="nm">${esc(c)}</div><div class="sb">${esc(D.catSub[c])}</div></a>`).join('')}</div>
 </section>
 <section class="section s48" aria-labelledby="h-best">

@@ -109,6 +109,8 @@ main{flex:1;outline:none}
 .cat-card:hover{color:inherit}
 .cat-card .ph{width:min(200px,100%);aspect-ratio:1;border-radius:50%;margin:0 auto;transition:transform .25s}
 .cat-card:hover .ph{transform:scale(1.04)}
+.cat-ico{width:46%;height:46%;color:var(--ink);transition:transform .25s,color .25s}
+.cat-card:hover .cat-ico{color:var(--plum);transform:rotate(-4deg) scale(1.06)}
 .cat-card .nm{font:400 27px var(--script);margin-top:14px}
 .cat-card .sb{font-size:14px;color:var(--muted);margin-top:2px}
 .prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
@@ -333,6 +335,7 @@ main{flex:1;outline:none}
 .foot-base{border-top:1px solid var(--muted);margin-top:32px;padding-top:16px;font-size:13px;color:var(--line)}
 .foot-base a{color:var(--line)}
 .wa-float{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--wa);color:#fff;display:flex;align-items:center;justify-content:center;font:700 13px var(--sans);box-shadow:0 6px 16px rgba(0,0,0,.25);z-index:9;transition:transform .15s}
+.wa-float svg{width:32px;height:32px}
 .wa-float:hover{color:#fff;transform:scale(1.07)}
 
 /* ---------- menú móvil y avisos ---------- */
