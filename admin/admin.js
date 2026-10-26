@@ -83,19 +83,39 @@ async function save() {
 }
 
 /* ---------- sesión ---------- */
+const bootEl = $('#boot');
+const bootOn = msg => { $('#boot-t').textContent = msg || 'Cargando panel…'; bootEl.hidden = false; };
+const bootOff = () => { bootEl.hidden = true; };
 function showLogin() {
+  bootOff();
   $('#shell').hidden = true; $('#login').hidden = false;
   $('#login-title').textContent = 'Panel de administración';
   $('#login-sub').textContent = 'Ingresa tu contraseña para continuar.';
   $('#login-pw').value = ''; $('#login-err').textContent = '';
   $('#login-pw').focus();
 }
+$('#pw-eye').addEventListener('click', e => {
+  const pw = $('#login-pw'), show = pw.type === 'password';
+  pw.type = show ? 'text' : 'password';
+  e.currentTarget.setAttribute('aria-pressed', show);
+  e.currentTarget.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+  $('.eye-on', e.currentTarget).hidden = show; $('.eye-off', e.currentTarget).hidden = !show;
+  pw.focus();
+});
+function loginBusy(on) {
+  const b = $('#login-btn');
+  b.setAttribute('aria-busy', on); b.disabled = on;
+  $('.spin', b).hidden = !on; $('#login-btn-t').textContent = on ? 'Entrando…' : 'Entrar';
+}
 $('#login-form').addEventListener('submit', async e => {
   e.preventDefault();
+  $('#login-err').textContent = ''; loginBusy(true);
   try {
     await api('POST', '/api/login', { password: $('#login-pw').value });
+    bootOn('Abriendo tu panel…'); $('#login').hidden = true;
     await boot();
-  } catch (err) { $('#login-err').textContent = err.message; }
+  } catch (err) { bootOff(); $('#login').hidden = false; $('#login-err').textContent = err.message; }
+  loginBusy(false);
 });
 $('#logout').addEventListener('click', async () => {
   if (dirty && !confirm('Tienes cambios sin guardar. ¿Salir de todos modos?')) return;
@@ -105,12 +125,13 @@ $('#logout').addEventListener('click', async () => {
 });
 
 async function boot() {
+  bootOn();
   const st = await (await fetch('/api/session', { credentials: 'same-origin' })).json();
   if (!st.auth) { showLogin(); return; }
   S = await api('GET', '/api/store');
   normalize();
   $('#login').hidden = true; $('#shell').hidden = false;
-  render();
+  render(); bootOff();
 }
 
 /* ---------- pestañas ---------- */
@@ -621,5 +642,5 @@ view.addEventListener('input', e => {
 });
 
 /* ---------- arranque ---------- */
-boot().catch(err => { document.body.insertAdjacentHTML('afterbegin', `<p style="padding:20px">No se pudo conectar con el panel (${esc(err.message)}). Revisa que la web esté desplegada en Vercel (o corriendo con <code>vercel dev</code>).</p>`); });
+boot().catch(err => { bootOff(); document.body.insertAdjacentHTML('afterbegin', `<p style="padding:20px">No se pudo conectar con el panel (${esc(err.message)}). Revisa que la web esté desplegada en Vercel (o corriendo con <code>vercel dev</code>).</p>`); });
 })();
