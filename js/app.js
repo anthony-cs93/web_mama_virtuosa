@@ -83,7 +83,7 @@ function pageHome() {
     <p>Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.</p>
     <div class="ctas"><a class="btn" href="${catHref('Belleza')}">Comprar ahora</a><a class="btn ghost" href="#/podcast">▶ Escuchar podcast</a></div>
   </div>
-  <div class="ph"><span aria-hidden="true">[foto hero · mamá + bebé]</span></div>
+  <div class="hero-img"><img src="img/hero.jpg" srcset="img/hero-m.jpg 800w, img/hero.jpg 1600w" sizes="(max-width:900px) 100vw, 50vw" width="1600" height="900" alt="Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso" fetchpriority="high"></div>
 </section>
 <div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Pago seguro · Yape · Plin · Tarjetas</div><div>↺ Cambios hasta 7 días</div></div>
 <section class="section" aria-labelledby="h-cat">
