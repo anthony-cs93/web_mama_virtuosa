@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas</title>
+  <meta name="description" content="Belleza, básicos para niños, ropa infantil, gomitas saludables y un podcast para acompañarte en la crianza. Envíos a todo el Perú.">
+  <meta name="theme-color" content="#2a2230">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Sacramento&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<a class="skip" href="#app">Saltar al contenido</a>
+
+<div class="page" id="page">
+  <div class="promo">Envío gratis en Lima desde S/ 150 · Cupón <b>BIENVENIDA10</b></div>
+
+  <header class="top">
+    <button class="icon-btn menu-btn" data-act="drawer-open" aria-label="Abrir menú" aria-controls="drawer" aria-expanded="false">☰</button>
+    <a class="logo" href="#/" aria-label="Mamá Virtuosa by Angie, ir al inicio">
+      <span>Mamá Virtuosa</span><small>by Angie</small>
+    </a>
+    <form class="search" id="search-form" role="search" autocomplete="off">
+      <span aria-hidden="true">⌕</span>
+      <input id="search-input" type="search" name="q" placeholder="Buscar brochas, vestidos, gomitas…" aria-label="Buscar productos">
+    </form>
+    <button class="icon-btn search-btn" data-act="search-toggle" aria-label="Buscar" aria-expanded="false">⌕</button>
+    <button class="account" data-act="account">Mi cuenta</button>
+    <a class="cart-btn" href="#/carrito" aria-label="Carrito">
+      <span class="cart-txt">Carrito</span><span class="cart-ico" aria-hidden="true">🛍</span>
+      <span class="badge" id="cart-count" aria-live="polite">0</span>
+    </a>
+  </header>
+
+  <nav class="nav" id="nav" aria-label="Categorías">
+    <div class="nav-row" id="nav-row"></div>
+    <div class="mega" id="mega" hidden></div>
+  </nav>
+
+  <main id="app" tabindex="-1"></main>
+
+  <footer class="foot">
+    <div class="foot-grid">
+      <div>
+        <div class="foot-logo">Mamá Virtuosa</div>
+        <p>Belleza, niños, ropa, gomitas saludables y podcast para mamás.</p>
+      </div>
+      <div>
+        <b>Tienda</b>
+        <a href="#/categoria/Belleza">Belleza</a>
+        <a href="#/categoria/Beb%C3%A9%20y%20ni%C3%B1os">Bebé y niños</a>
+        <a href="#/categoria/Ropa%20infantil">Ropa infantil</a>
+        <a href="#/categoria/Gomitas%20saludables">Gomitas</a>
+      </div>
+      <div>
+        <b>Ayuda</b>
+        <a href="#/ayuda/envios">Envíos</a>
+        <a href="#/ayuda/cambios">Cambios</a>
+        <a href="#" data-act="wa">Contacto</a>
+        <a href="#/podcast">Podcast</a>
+      </div>
+      <div>
+        <b>Newsletter</b>
+        <form class="news" id="news-form">
+          <input type="email" name="email" placeholder="Tu correo" aria-label="Correo para el newsletter" required autocomplete="email">
+          <button type="submit">Suscribir</button>
+        </form>
+      </div>
+    </div>
+    <div class="foot-base">
+      © <span id="year"></span> Mamá Virtuosa ·
+      <a href="#" data-act="social" data-net="Instagram">Instagram</a> ·
+      <a href="#" data-act="social" data-net="TikTok">TikTok</a> ·
+      <a href="#" data-act="social" data-net="Facebook">Facebook</a>
+    </div>
+  </footer>
+</div>
+
+<a class="wa-float" href="#" data-act="wa" aria-label="Escribir por WhatsApp">WA</a>
+
+<div class="scrim" id="scrim" data-act="drawer-close" hidden></div>
+<aside class="drawer" id="drawer" aria-label="Menú" aria-hidden="true">
+  <div class="drawer-head"><b>✕ Menú</b><button class="icon-btn" data-act="drawer-close" aria-label="Cerrar menú">✕</button></div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
