@@ -165,7 +165,7 @@ async function prepImage(file) {
   return file;
 }
 /* Sube directo a Vercel Blob (el servidor solo entrega un permiso firmado) y devuelve la URL pública */
-const BLOB_CLIENT = 'https://esm.sh/@vercel/blob@1.0.2/client';
+const BLOB_CLIENT = '/admin/blob-client.js';
 async function upload(kind, file) {
   const dot = file.name.lastIndexOf('.');
   const stem = file.name.slice(0, dot < 0 ? undefined : dot).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'archivo';

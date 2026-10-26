@@ -1,8 +1,14 @@
 {
   "name": "mama-virtuosa",
   "private": true,
+  "scripts": {
+    "build:admin": "esbuild admin/blob-entry.js --bundle --format=esm --platform=browser --minify --outfile=admin/blob-client.js"
+  },
   "type": "module",
   "dependencies": {
     "@vercel/blob": "^1.0.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }
