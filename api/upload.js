@@ -10,7 +10,7 @@ export default async function handler(req, res) {
       request: req,
       onBeforeGenerateToken: async pathname => {
         if (!isAuthed(req)) throw new Error('Inicia sesión');
-        const isImg = pathname.startsWith('img/products/'), isAudio = pathname.startsWith('audio/');
+        const isImg = pathname.startsWith('img/products/') || pathname.startsWith('img/hero/'), isAudio = pathname.startsWith('audio/');
         if (!isImg && !isAudio) throw new Error('Ruta no permitida');
         return {
           allowedContentTypes: isImg ? ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] : ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/wav', 'audio/x-wav', 'audio/ogg'],

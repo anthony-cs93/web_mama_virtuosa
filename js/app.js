@@ -81,21 +81,39 @@ const CAT_ICONS = {
 const CAT_ICON_DEFAULT = '<rect x="9" y="19" width="30" height="22" rx="3"/><path d="M6 13h36v6H6zM24 13v28"/><path d="M24 13c-4-8-12-6-10-2 1 2 6 2 10 2zM24 13c4-8 12-6 10-2-1 2-6 2-10 2z"/>';
 const catIcon = c => `<svg class="cat-ico" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${CAT_ICONS[c] || CAT_ICON_DEFAULT}</svg>`;
 
+/* ---------- hero (portada) y campañas de temporada ---------- */
+const DEFAULT_HERO = {
+  eyebrow: 'Nueva colección', title: 'Todo para mamá y sus peques',
+  text: 'Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.',
+  cta1: { label: 'Comprar ahora', link: '#/categoria/Belleza' }, cta2: { label: '▶ Escuchar podcast', link: '#/podcast' },
+  img: 'img/hero.jpg', imgM: 'img/hero-m.jpg', alt: 'Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso', pos: '60% 30%', bg: ''
+};
+const todayStr = () => new Date().toLocaleDateString('en-CA');
+const heroLive = h => h && h.active !== false && (!h.start || h.start <= todayStr()) && (!h.end || h.end >= todayStr());
+const activeHero = () => (D.heroes || []).find(heroLive) || { ...DEFAULT_HERO, ...(D.hero || {}) };
+const safeLink = l => (/^(#|\/|https?:\/\/)/.test(l || '') ? l : '#/');
+const heroBtn = (b, cls) => b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
+function heroHTML() {
+  const h = activeHero();
+  const img = h.img ? `<img src="${esc(h.img)}"${h.imgM ? ` srcset="${esc(h.imgM)} 800w, ${esc(h.img)} 1600w" sizes="(max-width:900px) 100vw, 50vw"` : ''} width="1600" height="900" alt="${esc(h.alt || '')}" fetchpriority="high"${h.pos ? ` style="object-position:${esc(h.pos)}"` : ''}>` : '';
+  return `<section class="hero" aria-labelledby="hero-h"${h.bg ? ` style="background:${esc(h.bg)}"` : ''}>
+  <div class="hero-txt">
+    ${h.eyebrow ? `<div class="eyebrow">${esc(h.eyebrow)}</div>` : ''}
+    <h1 id="hero-h">${esc(h.title)}</h1>
+    ${h.text ? `<p>${esc(h.text)}</p>` : ''}
+    <div class="ctas">${heroBtn(h.cta1, '')}${heroBtn(h.cta2, ' ghost')}</div>
+  </div>
+  <div class="hero-img">${img}</div>
+</section>`;
+}
+
 /* ---------- inicio ---------- */
 function pageHome() {
   const best = (D.featured || []).map(P).filter(p => p && p.stock > 0).slice(0, 8);
   return {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
-<section class="hero" aria-labelledby="hero-h">
-  <div class="hero-txt">
-    <div class="eyebrow">Nueva colección</div>
-    <h1 id="hero-h">Todo para mamá y sus peques</h1>
-    <p>Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.</p>
-    <div class="ctas"><a class="btn" href="${catHref('Belleza')}">Comprar ahora</a><a class="btn ghost" href="#/podcast">▶ Escuchar podcast</a></div>
-  </div>
-  <div class="hero-img"><img src="img/hero.jpg" srcset="img/hero-m.jpg 800w, img/hero.jpg 1600w" sizes="(max-width:900px) 100vw, 50vw" width="1600" height="900" alt="Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso" fetchpriority="high"></div>
-</section>
+${heroHTML()}
 <div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Pago seguro · Yape · Plin · Tarjetas</div><div>↺ Cambios hasta 7 días</div></div>
 <section class="section" aria-labelledby="h-cat">
   <h2 class="sec-title" id="h-cat">Compra por categoría</h2>
@@ -242,7 +260,7 @@ function pageProduct(id) {
       <div class="perks">🚚 Lima 2–4 días · provincias 4–7 días<br>↺ Cambios hasta 7 días<br>✔ ${stockTxt}</div>
       <div class="acc">
         <details open><summary>Descripción</summary><p>${esc(p.desc)}</p></details>
-        <details><summary>Medidas y cuidados</summary><p>${esc(p.care)}</p></details>
+        ${p.care ? `<details><summary>Medidas y cuidados</summary><p>${esc(p.care)}</p></details>` : ''}
         <details><summary>Envíos y cambios</summary><p>Delivery en Lima en 2–4 días hábiles y a provincias en 4–7 días. Cambios hasta 7 días después de recibir tu pedido.</p></details>
       </div>
     </div>

@@ -199,7 +199,7 @@ main{flex:1;outline:none}
 .acc summary::-webkit-details-marker{display:none}
 .acc summary::after{content:"⌄";transition:transform .2s}
 .acc details[open] summary::after{transform:rotate(180deg)}
-.acc p{margin:0 0 14px;line-height:1.6;color:var(--muted)}
+.acc p{margin:0 0 14px;line-height:1.6;color:var(--muted);white-space:pre-line}
 .related{font:400 38px var(--script);margin:56px 0 20px}
 .related-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
 .related-grid .ph{height:200px}

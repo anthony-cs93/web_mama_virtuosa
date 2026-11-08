@@ -49,6 +49,8 @@ window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); 
 function normalize() {
   const d = D();
   d.featured = d.featured || [];
+  d.heroes = d.heroes || [];
+  d.hero = { ...clone(DEFAULT_HERO), ...(d.hero || {}) };
   flagged.clear(); d.featured.forEach(id => flagged.add(id));
   d.episodes.forEach(e => { if (e.date === undefined) e.date = (e.meta || '').split(' · ')[1] || ''; });
   d.catOrder.forEach(c => { d.mega[c] = d.mega[c] || { cols: [], promo: null }; d.mega[c].cols = d.mega[c].cols || []; });
@@ -67,6 +69,9 @@ function payload() {
     if (p.imgs && p.imgs.length) p.img = p.imgs[0]; else { delete p.img; delete p.imgs; }
     if (!p.opt) delete p.opt;
   });
+  d.heroes.forEach(h => { if (!h.cta1) delete h.cta1; if (!h.cta2) delete h.cta2; });
+  if (!d.hero.cta1) delete d.hero.cta1;
+  if (!d.hero.cta2) delete d.hero.cta2;
   d.catOrder.forEach(c => { if (d.mega[c] && !d.mega[c].promo) delete d.mega[c].promo; });
   Object.keys(d.mega).forEach(k => { if (!d.catOrder.includes(k)) delete d.mega[k]; });
   return out;
@@ -144,7 +149,7 @@ $('#tabs').addEventListener('click', e => {
 $('#save').addEventListener('click', save);
 function render() {
   if (!S) return;
-  ({ productos: renderProducts, categorias: renderCats, podcast: renderPodcast, ajustes: renderSettings })[tab]();
+  ({ productos: renderProducts, categorias: renderCats, portada: renderHero, podcast: renderPodcast, ajustes: renderSettings })[tab]();
 }
 
 /* ---------- reordenar (arrastrar) ---------- */
@@ -193,7 +198,7 @@ async function upload(kind, file) {
   const ext = dot < 0 ? '' : file.name.slice(dot).toLowerCase();
   try {
     const { upload: blobUpload } = await import(BLOB_CLIENT);
-    const b = await blobUpload((kind === 'image' ? 'img/products/' : 'audio/') + stem + ext, file, { access: 'public', handleUploadUrl: '/api/upload' });
+    const b = await blobUpload(({ image: 'img/products/', hero: 'img/hero/', audio: 'audio/' })[kind] + stem + ext, file, { access: 'public', handleUploadUrl: '/api/upload' });
     return b.url;
   } catch (e) { throw new Error('No se pudo subir el archivo: ' + e.message); }
 }
@@ -275,6 +280,7 @@ view.addEventListener('click', e => {
   if (act.startsWith('c-')) return catClick(b, act);
   if (act.startsWith('e-')) return podClick(b, act);
   if (act.startsWith('s-')) return setClick(b, act);
+  if (act.startsWith('h-')) return heroClick(b, act);
 });
 
 function subOptions(cat) {
@@ -375,12 +381,13 @@ function productDialog(p) {
     const optValues = v.get('optValues').split(',').map(s => s.trim()).filter(Boolean), optLabel = v.get('optLabel').trim();
     if (optValues.length && !optLabel) return err('Ponle un nombre a la opción (ej. Talla).');
     const out = {
+      ...(isNew ? {} : p),
       id: isNew ? nextId() : p.id, name, cat: v.get('cat'), sub: v.get('sub').trim(),
       price: Math.round(price * 100) / 100, old: Math.round(old * 100) / 100, tag: v.get('tag').trim(), tone: v.get('tone'),
       stock: Number.isNaN(stock) ? 0 : Math.max(0, stock), ages: v.getAll('ages'),
       desc: v.get('desc').trim(), care: v.get('care').trim(), imgs: draft.imgs
     };
-    if (optValues.length) out.opt = { label: optLabel, values: optValues };
+    if (optValues.length) out.opt = { label: optLabel, values: optValues }; else delete out.opt;
     if (isNew) D().products.unshift(out); else D().products[D().products.indexOf(p)] = out;
     v.get('star') ? flagged.add(out.id) : flagged.delete(out.id);
     markDirty(); dlg.close(); renderProducts();
@@ -640,6 +647,216 @@ view.addEventListener('input', e => {
   else obj[last] = t.type === 'tel' ? t.value.replace(/\D/g, '') : t.value;
   markDirty();
 });
+
+/* =====================================================================
+   PORTADA (hero) Y CAMPAÑAS DE TEMPORADA
+   ===================================================================== */
+const DEFAULT_HERO = {
+  eyebrow: 'Nueva colección', title: 'Todo para mamá y sus peques',
+  text: 'Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.',
+  cta1: { label: 'Comprar ahora', link: '#/categoria/Belleza' }, cta2: { label: '▶ Escuchar podcast', link: '#/podcast' },
+  img: 'img/hero.jpg', imgM: 'img/hero-m.jpg', alt: 'Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso', pos: '60% 30%', bg: ''
+};
+const HERO_BG = 'linear-gradient(115deg,#fcfcc8 0%,#f8dcc6 16%,#fbbad9 34%,#c8befa 55%,#c8fcf4 76%,#ccfcc8 100%)';
+const POS = [['60% 30%', 'Predeterminado'], ['50% 50%', 'Centro'], ['50% 0%', 'Arriba'], ['50% 100%', 'Abajo'], ['0% 50%', 'Izquierda'], ['100% 50%', 'Derecha']];
+const PRESETS = {
+  'Navidad': { m1: 12, d1: 1, m2: 12, d2: 25, eyebrow: 'Navidad', title: 'Regala con amor esta Navidad', text: 'Detalles para mamá y sus peques, listos para regalar.', cta: ['Ver regalos', '#/ofertas'], bg: '#fcd9d9' },
+  'Día de la Madre': { m1: 5, d1: 1, m2: 5, d2: 11, eyebrow: 'Día de la Madre', title: 'Para la mejor mamá', text: 'Consiéntela con belleza y cuidado. Envíos a todo el Perú.', cta: ['Comprar ahora', '#/categoria/Belleza'], bg: '#fbbad9' },
+  'Día de la Mujer': { m1: 3, d1: 1, m2: 3, d2: 8, eyebrow: 'Día de la Mujer', title: 'Hoy celebramos a las mujeres', text: 'Un detalle especial con descuentos por su día.', cta: ['Ver ofertas', '#/ofertas'], bg: '#e8d5e6' },
+  'Cyber Days': { m1: 10, d1: 26, m2: 10, d2: 31, eyebrow: 'Cyber Days', title: 'Cyber Days: ofertas por tiempo limitado', text: 'Descuentos en belleza, ropa infantil y más. Hasta agotar stock.', cta: ['Ver ofertas', '#/ofertas'], bg: '#dcd5fb' },
+  'Black Friday': { m1: 11, d1: 24, m2: 11, d2: 30, eyebrow: 'Black Friday', title: 'Black Friday', text: 'Los mejores precios del año para mamá y sus peques.', cta: ['Ver ofertas', '#/ofertas'], bg: '#e4defd' },
+  'Día del Niño': { m1: 4, d1: 1, m2: 4, d2: 14, eyebrow: 'Día del Niño', title: 'Celebra a tus peques', text: 'Sorpresas y básicos para que disfruten su día.', cta: ['Ver productos', '#/categoria/Bebé%20y%20niños'], bg: '#fcf3c0' },
+  'Fiestas Patrias': { m1: 7, d1: 20, m2: 7, d2: 29, eyebrow: 'Fiestas Patrias', title: '¡Feliz 28 de julio!', text: 'Celebra con ofertas especiales por Fiestas Patrias.', cta: ['Ver ofertas', '#/ofertas'], bg: '#fcd9d9' },
+  'Vuelta a clases': { m1: 2, d1: 15, m2: 3, d2: 31, eyebrow: 'Vuelta a clases', title: 'Listos para volver a clases', text: 'Todo lo que necesitan tus peques para empezar el año.', cta: ['Ver productos', '#/categoria/Ropa%20infantil'], bg: '#c8fcf4' }
+};
+const ymd = dt => dt.toLocaleDateString('en-CA');
+function presetDates(t) {
+  const now = new Date(), y = now.getFullYear(), today = new Date(y, now.getMonth(), now.getDate());
+  const yy = new Date(y, t.m2 - 1, t.d2) < today ? y + 1 : y;
+  return { start: ymd(new Date(yy, t.m1 - 1, t.d1)), end: ymd(new Date(yy, t.m2 - 1, t.d2)) };
+}
+function heroStatus(h) {
+  const t = ymd(new Date());
+  if (h.active === false) return ['Pausada', 'off'];
+  if (h.start && h.start > t) return ['Programada', 'soon'];
+  if (h.end && h.end < t) return ['Vencida', 'off'];
+  return ['En vivo', 'live'];
+}
+const fmtDate = s => (s ? new Date(s + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const heroRange = h => (h.start || h.end ? `${h.start ? fmtDate(h.start) : 'Sin inicio'} → ${h.end ? fmtDate(h.end) : 'Sin fin'}` : 'Sin fechas (siempre)');
+
+function heroPreview(h) {
+  const btn = (b, g) => (b && b.label ? `<i class="${g ? 'g' : ''}">${esc(b.label)}</i>` : '');
+  return `<div class="hp" style="background:${esc(h.bg || HERO_BG)}">
+    <div class="hp-t">${h.eyebrow ? `<small>${esc(h.eyebrow)}</small>` : ''}<b>${esc(h.title || 'Título')}</b>${h.text ? `<span>${esc(h.text)}</span>` : ''}<div>${btn(h.cta1)}${btn(h.cta2, true)}</div></div>
+    <div class="hp-i">${h.img ? `<img src="${esc(src(h.img))}" alt="" style="object-position:${esc(h.pos || '60% 30%')}">` : '<em>Sin imagen</em>'}</div></div>`;
+}
+
+function renderHero() {
+  const d = D(), live = d.heroes.find(h => heroStatus(h)[1] === 'live'), shown = live || d.hero;
+  view.innerHTML = `
+  <div class="sec-head"><div><h1>Portada</h1>
+    <p class="muted">La imagen y el mensaje principal del inicio. Crea campañas de temporada con fechas y se activan y desactivan solas.</p></div>
+    <button class="btn" data-act="h-new">+ Nueva campaña</button></div>
+  <div class="card"><h2>Ahora en la tienda</h2>${heroPreview(shown)}
+    <p class="muted small" style="margin:10px 0 0">${live ? `Campaña «${esc(live.name)}»` : 'Portada por defecto (no hay campañas en vivo hoy)'}</p></div>
+  <h2 class="h2">Campañas</h2>
+  <p class="muted small" style="margin:-6px 0 12px">Si coinciden varias en fechas, se muestra la que esté más arriba. Arrastra ⋮⋮ o usa las flechas para cambiar la prioridad.</p>
+  <div class="rows" id="h-rows">${d.heroes.length ? d.heroes.map((h, i) => { const [st, k] = heroStatus(h); return `
+    <div class="row" data-i="${i}">
+      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">⋮⋮</button>
+      <div class="thumb wide">${h.img ? `<img src="${esc(src(h.img))}" alt="" loading="lazy">` : 'sin imagen'}</div>
+      <div class="main"><div class="nm">${esc(h.name)}<span class="st ${k}">${st}</span></div>
+        <div class="sub">${esc(h.title)} · ${esc(heroRange(h))}</div></div>
+      <div class="acts">
+        <button class="icon-btn ${h.active === false ? '' : 'on'}" data-act="h-toggle" aria-pressed="${h.active !== false}" title="${h.active === false ? 'Activar' : 'Pausar'}" aria-label="${h.active === false ? 'Activar' : 'Pausar'}">${h.active === false ? '▶' : '❚❚'}</button>
+        <button class="icon-btn" data-act="h-up" aria-label="Subir"${i === 0 ? ' disabled' : ''}>↑</button>
+        <button class="icon-btn" data-act="h-down" aria-label="Bajar"${i === d.heroes.length - 1 ? ' disabled' : ''}>↓</button>
+        <button class="icon-btn" data-act="h-edit" aria-label="Editar ${esc(h.name)}" title="Editar">✎</button>
+        <button class="icon-btn" data-act="h-dup" aria-label="Duplicar" title="Duplicar">⧉</button>
+        <button class="icon-btn" data-act="h-del" aria-label="Eliminar" title="Eliminar">🗑</button></div></div>`; }).join('') : '<div class="empty">Aún no hay campañas. Crea una desde una plantilla (Navidad, Día de la Madre, Cyber…).</div>'}</div>
+  <h2 class="h2" style="margin-top:28px">Portada por defecto</h2>
+  <div class="card">${heroPreview(d.hero)}<div style="margin-top:12px"><button class="btn ghost sm" data-act="h-default">Editar portada por defecto</button></div>
+    <p class="muted small" style="margin:10px 0 0">Se muestra cuando no hay ninguna campaña en vivo.</p></div>`;
+  sortable($('#h-rows'), (a, b) => { moveIn(D().heroes, a, b); markDirty(); renderHero(); });
+}
+function heroClick(b, act) {
+  const d = D();
+  if (act === 'h-new') return heroDialog(null);
+  if (act === 'h-default') return heroDialog('default');
+  const i = +b.closest('.row').dataset.i, h = d.heroes[i];
+  if (act === 'h-edit') heroDialog(h);
+  if (act === 'h-toggle') { h.active = h.active === false; markDirty(); renderHero(); }
+  if (act === 'h-up' && i > 0) { moveIn(d.heroes, i, i - 1); markDirty(); renderHero(); }
+  if (act === 'h-down' && i < d.heroes.length - 1) { moveIn(d.heroes, i, i + 1); markDirty(); renderHero(); }
+  if (act === 'h-dup') { const c = clone(h); c.name += ' (copia)'; c.active = false; d.heroes.splice(i + 1, 0, c); markDirty(); renderHero(); toast('Campaña duplicada (queda pausada)'); }
+  if (act === 'h-del' && confirm(`¿Eliminar la campaña «${h.name}»?`)) { d.heroes.splice(i, 1); markDirty(); renderHero(); }
+}
+
+/* Lista de destinos para los botones */
+function destOptions() {
+  const d = D();
+  return [['#/', 'Inicio'], ...d.catOrder.map(c => ['#/categoria/' + encodeURIComponent(c), 'Categoría: ' + c]), ['#/ofertas', 'Ofertas'], ['#/podcast', 'Podcast'],
+    ...d.products.map(p => ['#/producto/' + p.id, 'Producto: ' + p.name])];
+}
+function destField(n, cur) {
+  const opts = destOptions(), known = opts.some(o => o[0] === cur);
+  return `<select name="${n}Sel" aria-label="Destino del botón">${opts.map(o => `<option value="${esc(o[0])}"${o[0] === cur ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}<option value="custom"${cur && !known ? ' selected' : ''}>Otro enlace…</option></select>
+    <input type="text" name="${n}Custom" value="${cur && !known ? esc(cur) : ''}" placeholder="#/ofertas o https://…" aria-label="Enlace personalizado"${cur && !known ? '' : ' hidden'}>`;
+}
+
+function heroDialog(target) {
+  const isDef = target === 'default', isNew = !target, d = D();
+  const draft = isNew ? { name: '', active: true, start: '', end: '', eyebrow: '', title: '', text: '', cta1: { label: 'Ver ofertas', link: '#/ofertas' }, cta2: null, img: '', imgM: '', alt: '', pos: '60% 30%', bg: '' }
+    : clone(isDef ? d.hero : target);
+  dlg.innerHTML = `<form method="dialog" id="hf" novalidate>
+    <div class="dlg-head"><h2 id="dlg-title">${isDef ? 'Portada por defecto' : isNew ? 'Nueva campaña' : 'Editar campaña'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+    <div class="dlg-body">
+      <div id="hp-box"></div>
+      ${isNew ? `<label class="fld"><span>Empezar desde una plantilla</span><select name="preset"><option value="">En blanco</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join('')}</select><small>Llena el texto, el color y las fechas sugeridas; puedes cambiarlos.</small></label>` : ''}
+      ${isDef ? '' : `<label class="fld"><span>Nombre interno *</span><input type="text" name="name" value="${esc(draft.name)}" maxlength="60" placeholder="Navidad 2026"><small>Solo lo ves tú.</small></label>
+      <div class="grid3">
+        <label class="fld"><span>Desde</span><input type="date" name="start" value="${esc(draft.start)}"></label>
+        <label class="fld"><span>Hasta (incluido)</span><input type="date" name="end" value="${esc(draft.end)}"></label>
+        <label class="check" style="align-self:end;min-height:42px"><input type="checkbox" name="active"${draft.active !== false ? ' checked' : ''}> Activa</label></div>
+      <p class="muted small" style="margin:-6px 0 0">Sin fechas = siempre en vivo. Con fechas, se activa y se apaga sola (según la fecha del navegador del visitante).</p>`}
+      <div class="fld"><span>Imagen *</span>
+        <div class="audio-box"><div class="hero-up" id="hu"></div></div>
+        <small>Mejor horizontal, de 1600×900 px o más. Se crea sola la versión liviana para celular.</small></div>
+      <div class="grid2">
+        <label class="fld"><span>Enfoque de la imagen</span><select name="pos">${POS.map(p => `<option value="${p[0]}"${p[0] === draft.pos ? ' selected' : ''}>${p[1]}</option>`).join('')}</select><small>Qué parte se conserva al recortar.</small></label>
+        <label class="fld"><span>Descripción de la imagen (accesibilidad)</span><input type="text" name="alt" value="${esc(draft.alt)}" maxlength="140"></label></div>
+      <div class="grid2">
+        <label class="fld"><span>Etiqueta superior</span><input type="text" name="eyebrow" value="${esc(draft.eyebrow)}" maxlength="40" placeholder="Navidad"></label>
+        <label class="fld"><span>Título *</span><input type="text" name="title" value="${esc(draft.title)}" maxlength="70"></label></div>
+      <label class="fld"><span>Texto</span><textarea name="text" rows="2" maxlength="200">${esc(draft.text)}</textarea></label>
+      <div class="grid2">
+        <div class="stack"><label class="fld"><span>Botón principal: texto</span><input type="text" name="cta1Label" value="${esc(draft.cta1 ? draft.cta1.label : '')}" maxlength="30"></label>
+          <div class="fld"><span>Botón principal: destino</span>${destField('cta1', draft.cta1 ? draft.cta1.link : '#/')}</div></div>
+        <div class="stack"><label class="fld"><span>Botón secundario: texto (opcional)</span><input type="text" name="cta2Label" value="${esc(draft.cta2 ? draft.cta2.label : '')}" maxlength="30"></label>
+          <div class="fld"><span>Botón secundario: destino</span>${destField('cta2', draft.cta2 ? draft.cta2.link : '#/podcast')}</div></div></div>
+      <div class="fld"><span>Color de fondo del texto</span>
+        <div class="swatches" id="bg-sw"><button type="button" class="orig" data-bg="" aria-label="Degradado original" aria-pressed="${!draft.bg}" style="background:${HERO_BG}"></button>
+          ${TONES.map(t => `<button type="button" style="background:${t}" data-bg="${t}" aria-label="Color ${t}" aria-pressed="${t === draft.bg}"></button>`).join('')}
+          <input type="color" id="bg-c" value="${/^#[0-9a-f]{6}$/i.test(draft.bg) ? draft.bg : '#fbbad9'}" aria-label="Otro color"></div>
+        <input type="hidden" name="bg" value="${esc(draft.bg)}"></div>
+      <div class="form-err" id="hf-err" role="alert"></div>
+    </div>
+    <div class="dlg-foot"><span></span><div class="r"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">${isNew ? 'Crear campaña' : 'Aplicar'}</button></div></div>
+  </form>`;
+  const f = $('#hf'), el = n => f.elements[n];
+  const dest = n => (el(n + 'Sel').value === 'custom' ? el(n + 'Custom').value.trim() : el(n + 'Sel').value);
+  const read = () => ({
+    eyebrow: el('eyebrow').value.trim(), title: el('title').value.trim(), text: el('text').value.trim(),
+    cta1: el('cta1Label').value.trim() ? { label: el('cta1Label').value.trim(), link: dest('cta1') } : null,
+    cta2: el('cta2Label').value.trim() ? { label: el('cta2Label').value.trim(), link: dest('cta2') } : null,
+    img: draft.img, pos: el('pos').value, bg: el('bg').value
+  });
+  const preview = () => { $('#hp-box').innerHTML = heroPreview(read()); };
+  const drawUp = busy => {
+    $('#hu').innerHTML = `${draft.img ? `<img class="hu-img" src="${esc(src(draft.img))}" alt="Imagen actual">` : '<span class="muted small">Todavía no hay imagen.</span>'}
+      <label class="btn ghost sm">${busy ? 'Subiendo…' : draft.img ? 'Reemplazar imagen' : 'Subir imagen'}<input type="file" accept="image/*" hidden></label>`;
+  };
+  drawUp(); preview();
+  ['cta1', 'cta2'].forEach(n => el(n + 'Sel').addEventListener('change', () => { el(n + 'Custom').hidden = el(n + 'Sel').value !== 'custom'; preview(); }));
+  f.addEventListener('input', preview); f.addEventListener('change', preview);
+  const setBg = v => { el('bg').value = v; $$('#bg-sw button').forEach(b => b.setAttribute('aria-pressed', b.dataset.bg === v)); preview(); };
+  $('#bg-sw').addEventListener('click', e => { const b = e.target.closest('[data-bg]'); if (b) setBg(b.dataset.bg); });
+  $('#bg-c').addEventListener('input', e => setBg(e.target.value));
+  if (isNew) el('preset').addEventListener('change', () => {
+    const t = PRESETS[el('preset').value]; if (!t) return;
+    const dt = presetDates(t);
+    el('name').value = el('preset').value + ' ' + dt.start.slice(0, 4); el('start').value = dt.start; el('end').value = dt.end;
+    el('eyebrow').value = t.eyebrow; el('title').value = t.title; el('text').value = t.text; el('cta1Label').value = t.cta[0];
+    const sel = el('cta1Sel'), hit = [...sel.options].some(o => o.value === t.cta[1]);
+    sel.value = hit ? t.cta[1] : 'custom'; el('cta1Custom').hidden = hit; el('cta1Custom').value = hit ? '' : t.cta[1];
+    setBg(t.bg);
+  });
+  $('#hu').addEventListener('change', async ev => {
+    const file = ev.target.files && ev.target.files[0]; if (!file) return;
+    if (!file.type.startsWith('image/')) return toast('Ese archivo no es una imagen', true);
+    drawUp(true);
+    try {
+      const v = await heroVariants(file);
+      draft.img = await upload('hero', v.big); draft.imgM = v.small ? await upload('hero', v.small) : '';
+      if (v.w < 1000) toast('La imagen es pequeña (' + v.w + ' px); puede verse borrosa en pantallas grandes.', true);
+    } catch (err) { toast(err.message, true); }
+    drawUp(); preview();
+  });
+  f.addEventListener('submit', ev => {
+    ev.preventDefault();
+    const err = m => { $('#hf-err').textContent = m; };
+    const r = read(), okLink = l => /^(#|\/|https?:\/\/)/.test(l);
+    if (!isDef && !el('name').value.trim()) return err('Ponle un nombre interno a la campaña.');
+    if (!r.title) return err('Escribe el título.');
+    if (!draft.img) return err('Sube una imagen.');
+    if (r.cta1 && !okLink(r.cta1.link)) return err('El enlace del botón principal debe empezar con #/, / o https://');
+    if (r.cta2 && !okLink(r.cta2.link)) return err('El enlace del botón secundario debe empezar con #/, / o https://');
+    if (!isDef && el('start').value && el('end').value && el('end').value < el('start').value) return err('La fecha «Hasta» no puede ser anterior a «Desde».');
+    const out = { ...r, imgM: draft.imgM, alt: el('alt').value.trim() || r.title };
+    if (isDef) d.hero = out;
+    else {
+      Object.assign(out, { name: el('name').value.trim(), active: el('active').checked, start: el('start').value, end: el('end').value });
+      if (isNew) d.heroes.unshift(out); else d.heroes[d.heroes.indexOf(target)] = out;
+    }
+    markDirty(); dlg.close(); renderHero();
+    toast('Portada actualizada. Recuerda guardar los cambios.');
+  });
+  dlg.showModal(); (isDef ? el('title') : el(isNew ? 'preset' : 'name')).focus();
+}
+/* Crea la versión grande (1600 px) y la liviana (800 px) de la imagen, en JPEG */
+async function heroVariants(file) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const base = file.name.replace(/\.[^.]+$/, '');
+  const make = async (w, suffix) => {
+    const k = Math.min(1, w / bmp.width), c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    return new File([blob], base + suffix + '.jpg', { type: 'image/jpeg' });
+  };
+  return { big: await make(1600, ''), small: bmp.width > 900 ? await make(800, '-m') : null, w: bmp.width };
+}
 
 /* ---------- arranque ---------- */
 boot().catch(err => { bootOff(); document.body.insertAdjacentHTML('afterbegin', `<p style="padding:20px">No se pudo conectar con el panel (${esc(err.message)}). Revisa que la web esté desplegada en Vercel (o corriendo con <code>vercel dev</code>).</p>`); });

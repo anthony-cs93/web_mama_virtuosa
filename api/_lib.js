@@ -72,6 +72,8 @@ export function validate(store) {
     ['catSub', 'object'], ['catTone', 'object'], ['catShort', 'object'], ['mega', 'object'], ['shipping', 'object'], ['payments', 'object'], ['help', 'object']]) {
     if (t === 'array' ? !Array.isArray(d[k]) : (typeof d[k] !== 'object' || d[k] === null || Array.isArray(d[k]))) return `Falta o es inválido: ${k}`;
   }
+  if (d.heroes !== undefined && !Array.isArray(d.heroes)) return 'Campañas inválidas';
+  if (d.hero !== undefined && (typeof d.hero !== 'object' || d.hero === null || Array.isArray(d.hero))) return 'Portada inválida';
   const ids = new Set();
   for (const p of d.products) {
     if (!p || !Number.isInteger(p.id) || ids.has(p.id)) return 'Producto con id inválido o repetido';
