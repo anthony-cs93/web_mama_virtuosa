@@ -117,8 +117,8 @@ main{flex:1;outline:none}
 .cat-card:hover{color:inherit}
 .cat-card .ph{width:min(200px,100%);aspect-ratio:1;border-radius:50%;margin:0 auto;transition:transform .25s}
 .cat-card:hover .ph{transform:scale(1.04)}
-.cat-ico{width:46%;height:46%;color:var(--ink);transition:transform .25s,color .25s}
-.cat-card:hover .cat-ico{color:var(--plum);transform:rotate(-4deg) scale(1.06)}
+.cat-ico{display:block;width:46%;height:46%;background-color:var(--ink);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain;transition:transform .25s,background-color .25s}
+.cat-card:hover .cat-ico{background-color:var(--plum);transform:rotate(-4deg) scale(1.06)}
 .cat-card .nm{font:400 27px var(--script);margin-top:14px}
 .cat-card .sb{font-size:14px;color:var(--muted);margin-top:2px}
 .prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
