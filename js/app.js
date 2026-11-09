@@ -18,42 +18,91 @@ const store = {
 
 const main = $('#app');
 let toastTimer;
-function toast(msg) {
+function toast(msg, link) {
   const t = $('#toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  t.textContent = msg;
+  if (link) { const a = document.createElement('a'); a.href = link.href; a.textContent = link.label; t.append(' ', a); }
+  t.classList.toggle('has-link', !!link); t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), link ? 4500 : 2600);
 }
 function waLink(msg) {
   return 'https://wa.me/' + C.whatsapp + '?text=' + encodeURIComponent(msg || C.whatsappMsg);
 }
 
 /* ---------- carrito ---------- */
-let cart = store.get('mv_cart', []).filter(l => l && P(l.id) && l.qty > 0);
-let coupon = store.get('mv_coupon', '');
-if (coupon && !C.coupons[coupon]) coupon = '';
+const MAX_QTY = 10;
+const maxQty = p => Math.min(MAX_QTY, p.stock);
+const r2 = n => Math.round(n * 100) / 100;
+const validLine = l => { const p = l && P(l.id); return !!p && p.stock > 0 && l.qty > 0 && (!p.opt || !p.opt.values || !p.opt.values.length || p.opt.values.includes(l.opt)); };
+let cart = store.get('mv_cart', []).filter(validLine).map(l => ({ id: l.id, opt: l.opt || null, qty: Math.min(Math.floor(l.qty), maxQty(P(l.id))) }));
+let coupon = store.get('mv_coupon', null);   // { code, type, value, min }: lo valida el servidor al aplicarlo y otra vez al confirmar
+if (!coupon || typeof coupon !== 'object') coupon = null;
 const saveCart = () => { store.set('mv_cart', cart); store.set('mv_coupon', coupon); updateCartCount(); };
 function updateCartCount() { $('#cart-count').textContent = cart.reduce((a, l) => a + l.qty, 0); }
+/* devuelve true si se llegó al máximo disponible */
 function addToCart(id, opt, qty) {
-  const p = P(id), ex = cart.find(l => l.id === id && (l.opt || null) === (opt || null));
-  if (ex) ex.qty = Math.min(p.stock, ex.qty + qty); else cart.push({ id, opt: opt || null, qty: Math.min(p.stock, qty) });
+  const p = P(id), ex = cart.find(l => l.id === id && (l.opt || null) === (opt || null)), cap = maxQty(p);
+  const want = (ex ? ex.qty : 0) + qty;
+  if (ex) ex.qty = Math.min(cap, want); else cart.push({ id, opt: opt || null, qty: Math.min(cap, qty) });
   saveCart();
+  return want > cap;
 }
+
+/* Medios de pago: los datos (número de Yape, cuenta, recargo) los edita el panel en Ajustes */
+const PAYCFG = C.pay || {};
+const PAY_META = {
+  yape: { l: 'Yape / Plin', s: 'Pagas desde tu celular y subes la captura' },
+  bank: { l: 'Transferencia bancaria', s: 'Subes tu comprobante después de confirmar' },
+  card: { l: 'Tarjeta crédito / débito', s: 'Te enviamos un link de pago por WhatsApp' },
+  cod: { l: 'Pago contra entrega', s: 'Pagas al recibir · solo delivery en Lima' }
+};
+const payKeys = () => Object.keys(PAY_META).filter(k => !PAYCFG[k] || PAYCFG[k].on !== false);
+const surchargePct = () => Number((PAYCFG.card && PAYCFG.card.surcharge) || 0);
+const PAY_SHORT = { yape: 'Yape', bank: 'transferencia', card: 'tarjeta', cod: 'pago contra entrega' };
+const payNames = () => { const n = payKeys().map(k => PAY_SHORT[k]); if (payKeys().includes('yape')) n.splice(1, 0, 'Plin'); return n.join(', '); };
+
 function shipCost(sub, ship) {
-  if (ship === 'lima') return sub >= C.freeShippingFrom ? 0 : D.shipping.lima.p;
+  if (ship === 'lima' && C.freeShippingFrom > 0 && sub >= C.freeShippingFrom) return 0;
   return D.shipping[ship].p;
 }
-function totals(ship) {
-  const sub = cart.reduce((a, l) => a + P(l.id).price * l.qty, 0);
+const couponLabel = c => c.type === 'pct' ? `${c.value}% de descuento` : `S/ ${c.value} de descuento`;
+function couponDisc(sub) {
+  if (!coupon || (coupon.min && sub < coupon.min)) return 0;
+  return r2(Math.min(sub, coupon.type === 'pct' ? sub * coupon.value / 100 : coupon.value));
+}
+function totals(ship, pay) {
+  const sub = r2(cart.reduce((a, l) => a + P(l.id).price * l.qty, 0));
+  const regular = r2(cart.reduce((a, l) => { const p = P(l.id); return a + (p.old > p.price ? p.old : p.price) * l.qty; }, 0));
   const count = cart.reduce((a, l) => a + l.qty, 0);
-  const disc = Math.round(sub * (C.coupons[coupon] || 0) * 100) / 100;
+  const disc = couponDisc(sub);
   const sh = ship ? shipCost(sub, ship) : 0;
-  return { sub, count, disc, sh, total: sub - disc + sh };
+  const base = r2(sub - disc + sh);
+  const sur = pay === 'card' && surchargePct() > 0 ? r2(base * surchargePct() / 100) : 0;
+  return { sub, regular, savings: r2(regular - sub), count, disc, sh, sur, total: r2(base + sur) };
+}
+async function shopApi(url, body) {
+  let r;
+  try { r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'mv-shop' }, body: JSON.stringify(body) }); }
+  catch { throw new Error('No hay conexión. Revisa tu internet e intenta de nuevo.'); }
+  let j = {}; try { j = await r.json(); } catch { /* sin cuerpo */ }
+  if (!r.ok) throw new Error(j.error || 'No se pudo completar. Intenta de nuevo.');
+  return j;
+}
+async function applyCoupon(raw) {
+  const code = raw.trim().toUpperCase();
+  if (!code) { coupon = null; ui.couponMsg = null; saveCart(); return; }
+  try {
+    const r = (await shopApi('/api/orders?op=coupon', { code, subtotal: totals().sub })).coupon;
+    coupon = { code: r.code, type: r.type, value: r.value, min: r.min };
+    ui.couponMsg = { ok: true, t: `Cupón ${r.code} aplicado: ${couponLabel(coupon)}` };
+  } catch (e) { coupon = null; ui.couponMsg = { ok: false, t: e.message }; }
+  saveCart();
 }
 
 /* ---------- estado de interfaz ---------- */
 const ui = {
   pdp: { qty: 1, opt: null, img: 0 },
-  co: { step: 1, ship: 'lima', pay: 'card', f: {}, err: {}, agree: false, ruc: false, order: null },
+  co: { ship: 'lima', pay: payKeys()[0] || 'yape', f: { ...store.get('mv_fields', {}) }, err: {}, agree: false, doc: false, docType: 'boleta', busy: false },
   couponMsg: null,
   playing: null, elapsed: {}, topic: 'Todos', mega: null
 };
@@ -114,7 +163,7 @@ function pageHome() {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
 ${heroHTML()}
-<div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Pago seguro · Yape · Plin · Tarjetas</div><div>↺ Cambios hasta 7 días</div></div>
+<div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Paga con ${esc(payNames())}</div><div>↺ Cambios hasta 7 días</div></div>
 <section class="section" aria-labelledby="h-cat">
   <h2 class="sec-title" id="h-cat">Compra por categoría</h2>
   <div class="cat-grid">${D.catOrder.map(c => `<a class="cat-card" href="${catHref(c)}">
@@ -140,15 +189,20 @@ ${heroHTML()}
 
 /* ---------- listados (categoría, ofertas, búsqueda) ---------- */
 let F = null;
-function initFilters(base, presetSub, presetGoal) {
+const filtersOf = cat => (D.catFilters || {})[cat] || [];
+const pvals = (p, f) => (p.f && p.f[f.id]) || [];
+function initFilters(base, presetSub, filters = [], preset = null) {
   const prices = base.map(p => p.price);
   const lo = prices.length ? Math.floor(Math.min(...prices) / 10) * 10 : 0;
   const hi = prices.length ? Math.ceil(Math.max(...prices) / 10) * 10 : 100;
-  F = { base, lo, hi, min: lo, max: hi, subs: new Set(presetSub ? [presetSub] : []), goals: new Set(presetGoal ? [presetGoal] : []), ages: new Set(), offers: false, sort: 'sales' };
+  F = { base, lo, hi, min: lo, max: hi, subs: new Set(presetSub ? [presetSub] : []), fl: filters,
+    sel: Object.fromEntries(filters.map(f => [f.id, new Set(preset && preset.id === f.id ? [preset.value] : [])])),
+    ages: new Set(), offers: false, sort: 'sales' };
 }
 function filtered() {
   const list = F.base.filter(p =>
-    (!F.subs.size || F.subs.has(p.sub)) && (!F.goals.size || (p.goals || []).some(g => F.goals.has(g))) && p.price >= F.min && p.price <= F.max &&
+    (!F.subs.size || F.subs.has(p.sub)) && F.fl.every(f => !F.sel[f.id].size || pvals(p, f).some(v => F.sel[f.id].has(v))) &&
+    p.price >= F.min && p.price <= F.max &&
     (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old) && p.stock > 0);
   const by = {
     sales: (a, b) => (a.tag === 'Top' ? 0 : 1) - (b.tag === 'Top' ? 0 : 1),
@@ -167,16 +221,24 @@ function updateGrid(pending) {
      <p>${pending ? 'Estamos preparando esta sección.' : 'Prueba quitando algún filtro.'}</p>
      <a class="btn" href="#/">Volver al inicio</a></div>`;
   $$('[data-f=sub]').forEach(i => { i.checked = F.subs.has(i.value); });
-  $$('[data-f=goal]').forEach(i => { i.checked = F.goals.has(i.value); });
+  $$('[data-f=fopt]').forEach(i => { i.checked = F.sel[i.dataset.fid].has(i.value); });
+  $$('[data-f=fall]').forEach(i => { i.checked = !F.sel[i.dataset.fid].size; });
   const all = $('[data-f=subs-all]'); if (all) all.checked = F.subs.size === 0;
   $('#min-out') && ($('#min-out').textContent = 'S/ ' + F.min);
   $('#max-out') && ($('#max-out').textContent = 'S/ ' + F.max);
 }
-function listPage({ title, crumbList, base, sub, goal, pending, showSubs = true, subLabel = 'Subcategoría', subList = null, goalsList = [] }) {
-  initFilters(base, sub, goal);
-  const subs = subList || [...new Set(base.map(p => p.sub))];
-  const goalList = goalsList.map(g => [g, base.filter(p => p.stock > 0 && (p.goals || []).includes(g)).length]).filter(x => x[1]);
+function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null }) {
+  initFilters(base, sub, filters, preset);
+  const subs = [...new Set(base.map(p => p.sub).filter(Boolean))];
   const hasAges = base.some(p => p.ages && p.ages.length);
+  /* un bloque por cada filtro configurado en el panel; solo se listan las opciones que tienen productos */
+  const filterHtml = filters.map(f => {
+    const opts = f.options.map(o => [o, base.filter(p => p.stock > 0 && pvals(p, f).includes(o)).length]).filter(x => x[1]);
+    if (!opts.length) return '';
+    return `<fieldset><legend>${esc(f.name)}</legend>
+        <label class="chk"><input type="checkbox" data-f="fall" data-fid="${esc(f.id)}" checked> Todas</label>
+        ${opts.map(([o, n]) => `<label class="chk"><input type="checkbox" data-f="fopt" data-fid="${esc(f.id)}" value="${esc(o)}"> ${esc(o)} <span class="cnt">${n}</span></label>`).join('')}</fieldset>`;
+  }).join('');
   const html = `
 <div class="cat-page">
   ${crumbs(crumbList)}
@@ -191,11 +253,10 @@ function listPage({ title, crumbList, base, sub, goal, pending, showSubs = true,
   </div>
   <div class="cat-body">
     <form class="filters" id="filters" onsubmit="return false" aria-label="Filtros">
-      ${showSubs ? `<fieldset><legend>${esc(subLabel)}</legend>
+      ${filterHtml}
+      ${showSubs && !filters.length && subs.length ? `<fieldset><legend>Subcategoría</legend>
         <label class="chk"><input type="checkbox" data-f="subs-all" checked> Todas</label>
         ${subs.map(s => `<label class="chk"><input type="checkbox" data-f="sub" value="${esc(s)}"> ${esc(s)}</label>`).join('')}</fieldset>` : ''}
-      ${goalList.length ? `<fieldset><legend>Por beneficio</legend>
-        ${goalList.map(([g, n]) => `<label class="chk"><input type="checkbox" data-f="goal" value="${esc(g)}"> ${esc(g)} <span class="cnt">${n}</span></label>`).join('')}</fieldset>` : ''}
       <fieldset><legend>Precio</legend>
         <div class="range">
           <input type="range" data-f="min" min="${F.lo}" max="${F.hi}" step="5" value="${F.min}" aria-label="Precio mínimo">
@@ -212,20 +273,26 @@ function listPage({ title, crumbList, base, sub, goal, pending, showSubs = true,
 </div>`;
   return { title, html, after: () => updateGrid(pending) };
 }
-function pageCategory(cat, sub) {
+/* El segmento de la ruta puede ser «f~<id>~<opción>» (enlace exacto) o el nombre de una opción (enlaces antiguos del menú) */
+function pageCategory(cat, seg) {
   if (!D.catOrder.includes(cat)) return pageNotFound();
-  const base = D.products.filter(p => p.cat === cat);
-  const cf = (D.catFilter || {})[cat] || {};
-  let goal = null;
-  const gl = (D.catGoals || {})[cat] || [];
-  if (sub && sub.startsWith('beneficio:')) { goal = gl.includes(sub.slice(10)) ? sub.slice(10) : null; sub = null; }
-  const has = sub && base.some(p => p.sub === sub);
-  const crumb = sub || goal;
+  const base = D.products.filter(p => p.cat === cat), filters = filtersOf(cat);
+  let preset = null;
+  if (seg) {
+    const m = /^f~([^~]+)~(.+)$/.exec(seg);
+    if (m) {
+      const f = filters.find(x => x.id === m[1]);
+      if (f && f.options.includes(m[2])) preset = { id: f.id, value: m[2] };
+    } else {
+      const low = seg.toLowerCase(), f = filters.find(x => x.options.some(o => o.toLowerCase() === low));
+      if (f) preset = { id: f.id, value: f.options.find(o => o.toLowerCase() === low) };
+    }
+  }
+  const crumb = preset ? preset.value : (seg && !/^f~/.test(seg) ? seg : null);
   return listPage({
     title: crumb || cat,
     crumbList: [['Inicio', '#/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
-    base, sub: has ? sub : null, goal, pending: sub && !has ? sub : null,
-    subLabel: cf.label || 'Subcategoría', subList: cf.options && cf.options.length ? cf.options : null, goalsList: gl
+    base, filters, preset, pending: crumb && !preset ? crumb : null
   });
 }
 function pageOffers() {
@@ -262,7 +329,7 @@ function pageProduct(id) {
       <div class="eyebrow">${esc(p.cat)}</div>
       <h1>${esc(p.name)}</h1>
       <div class="price">${fmt(p.price)}${p.old ? `<s>${fmt(p.old)}</s>` : ''}</div>
-      <div class="muted" style="font-size:14px">Paga con tarjeta, Yape o Plin.</div>
+      <div class="muted" style="font-size:14px">Paga con ${esc(payNames())}.</div>
       ${p.opt ? `<div><div class="opt-head"><span>${esc(p.opt.label)}</span>${p.opt.label === 'Talla' ? '<button class="link ul" data-act="toast" data-msg="La guía de tallas estará disponible pronto">Guía de tallas</button>' : ''}</div>
         <div class="opts" role="group" aria-label="${esc(p.opt.label)}">${p.opt.values.map(v => `<button class="opt" data-act="pdp-opt" data-v="${esc(v)}" aria-pressed="false">${esc(v)}</button>`).join('')}</div></div>` : ''}
       <div class="buy-row desk">${qtyCtl()}<button class="btn" data-act="pdp-add">Agregar al carrito</button></div>
@@ -295,35 +362,40 @@ function currentProductId() { return +parseHash()[1]; }
 
 /* ---------- carrito (página) ---------- */
 function lineLabel(l) { const p = P(l.id); return l.opt ? `${p.opt ? p.opt.label + ' ' : ''}${l.opt}` : p.cat; }
+const payLine = () => `🔒 Paga con ${payNames()}`;
+const couponBox = () => `<form class="coupon" data-form="coupon"><input name="code" placeholder="Cupón de descuento" aria-label="Cupón de descuento" autocomplete="off" value="${esc(coupon ? coupon.code : '')}"><button type="submit">Aplicar</button></form>
+    ${ui.couponMsg ? `<div class="coupon-msg ${ui.couponMsg.ok ? 'ok' : 'bad'}" role="status">${esc(ui.couponMsg.t)}</div>` : ''}
+    ${coupon && coupon.min && totals().sub < coupon.min ? `<div class="coupon-msg bad" role="status">El cupón ${esc(coupon.code)} aplica desde ${fmt(coupon.min)} en productos.</div>` : ''}`;
 function cartView() {
   const t = totals();
+  const free = C.freeShippingFrom > 0;
   const need = Math.max(0, C.freeShippingFrom - t.sub);
-  const pct = Math.min(100, t.sub / C.freeShippingFrom * 100).toFixed(0);
+  const pct = Math.min(100, t.sub / (C.freeShippingFrom || 1) * 100).toFixed(0);
   let body;
   if (!cart.length) {
     body = `<div class="empty-cart"><div class="script">Tu carrito está vacío</div><a class="btn" href="#/">Seguir comprando</a></div>`;
   } else {
     body = `<div class="cart-grid">
   <div>
-    <div class="free-bar" role="status">${need > 0 ? `Te faltan <b>${fmt(need)}</b> para envío gratis en Lima` : '¡Tienes envío gratis en Lima!'}<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>
-    <div class="lines">${cart.map((l, i) => { const p = P(l.id); return `<div class="line">
+    ${free ? `<div class="free-bar" role="status">${need > 0 ? `Te faltan <b>${fmt(need)}</b> para envío gratis en Lima` : '¡Tienes envío gratis en Lima!'}<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>` : ''}
+    <div class="lines">${cart.map((l, i) => { const p = P(l.id), cap = maxQty(p); return `<div class="line">
       <div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
-      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u</div>
+      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u${p.stock <= 5 ? ` · <b>quedan ${p.stock}</b>` : ''}</div>
         <button class="link ul" data-act="line-rm" data-i="${i}">Quitar</button></div>
-      <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos">–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más">+</button></div>
+      <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos" ${l.qty <= 1 ? 'disabled' : ''}>–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más" ${l.qty >= cap ? 'disabled' : ''}>+</button></div>
       <div class="tot">${fmt(p.price * l.qty)}</div></div>`; }).join('')}</div>
     <a class="link" href="#/" style="display:inline-block;margin-top:18px">← Seguir comprando</a>
   </div>
   <aside class="summary" aria-label="Resumen">
     <h2>Resumen</h2>
-    <form class="coupon" data-form="coupon"><input name="code" placeholder="Cupón de descuento" aria-label="Cupón de descuento" autocomplete="off" value="${esc(coupon)}"><button type="submit">Aplicar</button></form>
-    ${ui.couponMsg ? `<div class="coupon-msg ${ui.couponMsg.ok ? 'ok' : 'bad'}" role="status">${esc(ui.couponMsg.t)}</div>` : ''}
+    ${couponBox()}
     <div class="srow"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
-    ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
+    ${t.savings ? `<div class="srow disc"><span>Ya ahorras en ofertas</span><span>${fmt(t.savings)}</span></div>` : ''}
+    ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon.code)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
     <div class="srow"><span>Envío</span><span class="muted">se calcula al pagar</span></div>
     <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
-    <a class="btn block" href="#/checkout" data-act="to-checkout">Ir a pagar</a>
-    <div class="safe">🔒 Pago seguro · Visa · Mastercard · Yape · Plin</div>
+    <a class="btn block" href="#/checkout">Finalizar compra</a>
+    <div class="safe">${esc(payLine())}</div>
   </aside>
 </div>`;
   }
@@ -331,114 +403,284 @@ function cartView() {
 }
 function pageCart() { return { title: 'Tu carrito', html: cartView() }; }
 
-/* ---------- checkout ---------- */
+/* ---------- checkout (una sola página: datos, entrega y pago) ---------- */
 const FIELDS = {
-  email: { l: 'Correo electrónico', type: 'email', ac: 'email', test: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), msg: 'Ingresa un correo válido' },
-  phone: { l: 'Celular', type: 'tel', ac: 'tel-national', test: v => /^\d{9}$/.test(v.replace(/\s/g, '')), msg: 'Ingresa un celular de 9 dígitos' },
   nombres: { l: 'Nombres', ac: 'given-name' },
   apellidos: { l: 'Apellidos', ac: 'family-name' },
-  dni: { l: 'DNI / CE', ac: 'off', test: v => /^[A-Za-z0-9]{8,12}$/.test(v), msg: 'Ingresa un DNI (8 dígitos) o CE válido', addr: false },
-  depto: { l: 'Departamento', ac: 'address-level1', addr: true },
-  prov: { l: 'Provincia', ac: 'address-level2', addr: true },
-  distrito: { l: 'Distrito', ac: 'address-level3', addr: true },
-  dir: { l: 'Dirección y número', ac: 'street-address', addr: true },
+  phone: { l: 'Celular (WhatsApp)', type: 'tel', ac: 'tel-national', test: v => /^\d{9}$/.test(v.replace(/\s/g, '')), msg: 'Ingresa un celular de 9 dígitos' },
+  email: { l: 'Correo (opcional)', type: 'email', ac: 'email', opt: true, test: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), msg: 'Ingresa un correo válido' },
+  depto: { l: 'Departamento', ac: 'address-level1' },
+  prov: { l: 'Provincia', ac: 'address-level2' },
+  distrito: { l: 'Distrito', ac: 'address-level3' },
+  dir: { l: 'Dirección y número', ac: 'street-address' },
   ref: { l: 'Referencia (opcional)', opt: true },
-  ruc: { l: 'RUC', ac: 'off', test: v => /^\d{11}$/.test(v), msg: 'El RUC tiene 11 dígitos', billing: true },
-  razon: { l: 'Razón social', ac: 'organization', billing: true }
+  dni: { l: 'DNI', ac: 'off', test: v => /^\d{8}$/.test(v), msg: 'El DNI tiene 8 dígitos' },
+  ruc: { l: 'RUC', ac: 'off', test: v => /^\d{11}$/.test(v), msg: 'El RUC tiene 11 dígitos' },
+  razon: { l: 'Razón social', ac: 'organization' },
+  notes: { l: 'Nota para tu pedido (opcional)', opt: true, area: true, max: 300 }
 };
-const fld = (k, extra = '') => {
+const applies = k => {
+  const st = ui.co;
+  if (k === 'depto' || k === 'prov') return st.ship === 'prov';
+  if (k === 'distrito' || k === 'dir' || k === 'ref') return st.ship !== 'pick';
+  if (k === 'dni') return st.doc && st.docType === 'boleta';
+  if (k === 'ruc' || k === 'razon') return st.doc && st.docType === 'factura';
+  return true;
+};
+const fieldError = k => {
+  const d = FIELDS[k], v = (ui.co.f[k] || '').trim();
+  if (!v) return d.opt ? '' : 'Completa este campo';
+  return d.test && !d.test(v) ? d.msg : '';
+};
+const fld = (k, extra = '', label) => {
   const d = FIELDS[k], v = ui.co.f[k] || '', e = ui.co.err[k];
-  return `<div class="fld ${e ? 'err' : ''} ${extra}"><label for="f-${k}">${d.l}</label>
-    <input id="f-${k}" name="${k}" data-co="${k}" type="${d.type || 'text'}" value="${esc(v)}" autocomplete="${d.ac || 'off'}"${d.type === 'tel' ? ' inputmode="numeric"' : ''}${e ? ` aria-invalid="true" aria-describedby="e-${k}"` : ''}>
+  const attrs = `id="f-${k}" name="${k}" data-co="${k}" autocomplete="${d.ac || 'off'}"${e ? ' aria-invalid="true"' : ''} aria-describedby="e-${k}"`;
+  return `<div class="fld ${e ? 'err' : ''} ${extra}" data-fld="${k}"><label for="f-${k}">${label || d.l}</label>
+    ${d.area ? `<textarea ${attrs} rows="2" maxlength="${d.max}">${esc(v)}</textarea>` : `<input ${attrs} type="${d.type || 'text'}" value="${esc(v)}"${d.type === 'tel' ? ' inputmode="numeric"' : ''}>`}
     <div class="msg" id="e-${k}">${e ? esc(e) : ''}</div></div>`;
 };
-function validateStep1() {
+function showErr(k, msg) {
+  const w = $(`[data-fld="${k}"]`); if (!w) return;
+  w.classList.toggle('err', !!msg); $('.msg', w).textContent = msg || '';
+  const i = $('input,textarea', w); if (msg) i.setAttribute('aria-invalid', 'true'); else i.removeAttribute('aria-invalid');
+}
+function validateAll() {
   const st = ui.co, err = {};
-  Object.entries(FIELDS).forEach(([k, d]) => {
-    if (d.opt) return;
-    if (d.billing && !st.ruc) return;
-    if (d.addr && st.ship === 'pick') return;
-    const v = (st.f[k] || '').trim();
-    if (!v) err[k] = 'Completa este campo';
-    else if (d.test && !d.test(v)) err[k] = d.msg;
-  });
+  Object.keys(FIELDS).forEach(k => { if (!applies(k)) return; const m = fieldError(k); if (m) err[k] = m; });
   st.err = err;
   return Object.keys(err);
 }
-function choiceHTML(kind, map, selected, disabledKeys = []) {
-  return `<div role="radiogroup" style="display:flex;flex-direction:column;gap:14px">${Object.keys(map).map(k => {
-    const o = map[k], dis = disabledKeys.includes(k);
-    const price = kind === 'ship' ? `<b>${shipCost(totals().sub, k) === 0 ? 'Gratis' : fmt(shipCost(totals().sub, k))}</b>` : '';
-    return `<button type="button" class="choice" role="radio" aria-checked="${selected === k}" data-act="pick-${kind}" data-k="${k}"${dis ? ' disabled' : ''}>
-      <span class="rd"></span><span class="tx"><b>${esc(o.l)}</b><small>${esc(o.s)}${dis ? ' · no disponible para provincia' : ''}</small></span>${price}</button>`;
-  }).join('')}</div>`;
+function choiceHTML(kind, entries, selected) {
+  return `<div role="radiogroup" class="choices">${entries.map(e => `<button type="button" class="choice" role="radio" aria-checked="${selected === e.k}" data-act="pick-${kind}" data-k="${e.k}"${e.dis ? ' disabled' : ''}>
+      <span class="rd"></span><span class="tx"><b>${esc(e.l)}</b><small>${esc(e.s)}</small></span>${e.price ? `<b>${esc(e.price)}</b>` : ''}</button>`).join('')}</div>`;
+}
+function payNote(t) {
+  const st = ui.co, pct = surchargePct();
+  const m = {
+    yape: 'Al confirmar verás el número y el QR de Yape / Plin. Pagas desde tu celular y subes la captura para validar tu pago.',
+    bank: 'Al confirmar verás los datos de la cuenta. Haces la transferencia y subes tu comprobante para validar tu pago.',
+    card: `Al confirmar te enviamos un link de pago seguro por WhatsApp.${pct > 0 ? ` Este medio tiene un recargo de ${pct}% (${fmt(t.sur)} en este pedido).` : ''}`,
+    cod: `Pagas ${fmt(t.total)} en efectivo al recibir tu pedido (solo delivery en Lima). Si necesitas vuelto, avísanos por WhatsApp.`
+  };
+  return `<div class="pay-note">${m[st.pay] || ''}</div>`;
 }
 function summaryHTML(inner) {
-  const st = ui.co, t = totals(st.ship);
-  const rows = cart.map(l => { const p = P(l.id); return `<div class="sum-line"><div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
-    <div class="t"><b>${esc(p.name)}</b><br><span class="muted">${l.opt ? esc(l.opt) + ' · ' : ''}Cant. ${l.qty}</span></div><b>${fmt(p.price * l.qty)}</b></div>`; }).join('');
+  const st = ui.co, t = totals(st.ship, st.pay);
+  const rows = cart.map((l, i) => { const p = P(l.id), cap = maxQty(p); return `<div class="sum-line"><div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
+    <div class="t"><b>${esc(p.name)}</b>${l.opt ? `<br><span class="muted">${esc(l.opt)}</span>` : ''}
+      <div class="qty sm mini"><button type="button" data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos de ${esc(p.name)}" ${l.qty <= 1 ? 'disabled' : ''}>–</button><b>${l.qty}</b><button type="button" data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más de ${esc(p.name)}" ${l.qty >= cap ? 'disabled' : ''}>+</button></div></div><b>${fmt(p.price * l.qty)}</b></div>`; }).join('');
   return `${inner ? '' : '<h2>Resumen del pedido</h2>'}${rows}
-    <div class="srow" style="border-top:1px solid var(--line);padding-top:12px"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
-    ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
+    ${couponBox()}
+    ${t.savings ? `<div class="srow muted" style="border-top:1px solid var(--line);padding-top:12px"><span>Precio regular</span><s>${fmt(t.regular)}</s></div>` : ''}
+    <div class="srow"${t.savings ? '' : ' style="border-top:1px solid var(--line);padding-top:12px"'}><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
+    ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon.code)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
     <div class="srow"><span>Envío</span><span>${t.sh === 0 ? 'Gratis' : fmt(t.sh)}</span></div>
+    ${t.sur ? `<div class="srow"><span>Recargo tarjeta (${surchargePct()}%)</span><span>${fmt(t.sur)}</span></div>` : ''}
     <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
-    <div class="safe">🔒 Pago seguro</div>`;
+    ${t.savings + t.disc > 0 ? `<div class="save-note">¡Ahorras ${fmt(r2(t.savings + t.disc))} en esta compra!</div>` : ''}
+    <div class="safe">${esc(payLine())}</div>`;
 }
 function checkoutView() {
-  const st = ui.co, t = totals(st.ship);
-  const steps = ['Datos', 'Pago', 'Listo'].map((l, i) => `<div class="step ${st.step === i + 1 ? 'cur' : st.step > i + 1 ? 'done' : ''}"><i>${i + 1}</i><span>${l}</span>${i < 2 ? '<em>—</em>' : ''}</div>`).join('');
-  let left;
-  if (st.step === 1) {
-    left = `<form class="form" data-form="step1" novalidate>
-      <div class="head-row"><h2>Contacto</h2></div>
-      ${fld('email')}${fld('phone')}
-      <h2>Datos y dirección de envío</h2>
-      <div class="row2">${fld('nombres')}${fld('apellidos')}${fld('dni', 'span2')}</div>
-      ${st.ship === 'pick' ? '<div class="pay-note">Con recojo en punto no necesitas ingresar dirección. Te avisaremos por WhatsApp dónde recoger.</div>' :
-        `<div class="row2">${fld('depto')}${fld('prov')}${fld('distrito', 'span2')}</div>${fld('dir')}${fld('ref')}`}
-      <h2>Método de entrega</h2>
-      ${choiceHTML('ship', D.shipping, st.ship)}
-      <div class="actions"><a class="link" href="#/carrito">← Volver al carrito</a><button class="btn" type="submit">Continuar al pago</button></div></form>`;
-  } else if (st.step === 2) {
-    const f = st.f, addr = st.ship === 'pick' ? 'Recojo en punto' : `${esc(f.dir)}, ${esc(f.distrito)}`;
-    left = `<form class="form" data-form="step2" novalidate>
-      <div class="recap"><button type="button" class="link ul" data-act="goto-step1">Cambiar</button>Contacto: ${esc(f.email)}<br><span class="muted">Enviar a:</span> ${addr}</div>
-      <h2>Método de pago</h2>
-      ${choiceHTML('pay', D.payments, st.pay, st.ship === 'prov' ? ['cod'] : [])}
-      ${st.pay === 'card' ? `<div class="row2">
-        <div class="fld span2"><label for="cc-num">Número de tarjeta</label><input id="cc-num" inputmode="numeric" autocomplete="cc-number" maxlength="23"></div>
-        <div class="fld"><label for="cc-exp">MM/AA</label><input id="cc-exp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/AA" maxlength="5"></div>
-        <div class="fld"><label for="cc-cvv">CVV</label><input id="cc-cvv" inputmode="numeric" autocomplete="cc-csc" maxlength="4"></div>
-        <div class="fld span2"><label for="cc-name">Nombre en la tarjeta</label><input id="cc-name" autocomplete="cc-name"></div></div>` : ''}
-      ${st.pay === 'yape' ? '<div class="pay-note">Al confirmar te enviaremos el QR de Yape / Plin para completar el pago.</div>' : ''}
-      ${st.pay === 'bank' ? '<div class="pay-note">Al confirmar te enviaremos los datos de la cuenta. Envía el voucher por WhatsApp para validar tu pago.</div>' : ''}
-      ${st.pay === 'cod' ? '<div class="pay-note">Pagas al recibir tu pedido. Solo disponible en Lima.</div>' : ''}
-      <div class="legal">
-        <label><input type="checkbox" data-co-check="ruc"${st.ruc ? ' checked' : ''}> Factura con RUC</label>
-        ${st.ruc ? `<div class="row2" style="margin:6px 0">${fld('ruc')}${fld('razon')}</div>` : ''}
-        <label><input type="checkbox" data-co-check="agree" id="agree"${st.agree ? ' checked' : ''}> Acepto los términos y la política de privacidad</label>
-        <div class="fld ${st.err.agree ? 'err' : ''}"><div class="msg" id="e-agree" role="alert">${st.err.agree ? esc(st.err.agree) : ''}</div></div>
-      </div>
-      <div class="actions"><button type="button" class="link" data-act="goto-step1">← Volver</button><button class="btn" type="submit">Confirmar pedido · ${fmt(t.total)}</button></div></form>`;
-  } else {
-    const o = st.order;
-    left = `<div class="done">
-      <div class="check" aria-hidden="true">✓</div>
-      <h1 class="script">¡Gracias por tu compra!</h1>
-      <div class="muted" style="font-size:16px">Pedido <b style="color:var(--ink)">#${esc(o.no)}</b> · enviaremos el detalle a ${esc(o.email)}</div>
-      <div class="card-info">Entrega estimada: <b>${esc(o.eta)}</b><br>Envío: <b>${esc(o.ship)}</b><br>Pago: <b>${esc(o.pay)}</b><br>Total: <b>${fmt(o.total)}</b></div>
-      <div class="row"><a class="btn" href="#/">Seguir comprando</a><button class="btn wa" data-act="wa" data-msg="${esc('Hola Angie, acabo de hacer el pedido #' + o.no + '.')}">💬 Escribir por WhatsApp</button></div>
-      <a class="podcast-link" href="#/podcast">🎙 Mientras esperas, escucha el último episodio ▶</a></div>`;
-  }
-  const side = st.step < 3 ? `<aside class="summary co-side" aria-label="Resumen del pedido">${summaryHTML()}</aside>` : '';
-  const mSum = st.step < 3 ? `<details class="sum-m"><summary><span>Resumen del pedido (${t.count})</span><b>${fmt(t.total)} ⌄</b></summary><div class="in">${summaryHTML(true)}</div></details>` : '';
-  return `<div class="co-page">${st.step < 3 ? '<h1 class="sr">Finalizar compra</h1>' : ''}
-    <div class="steps" aria-label="Progreso">${steps}</div>${mSum}<div class="co-grid"><div>${left}</div>${side}</div></div>`;
+  const st = ui.co, t = totals(st.ship, st.pay);
+  const shipEntries = Object.keys(D.shipping).map(k => { const o = D.shipping[k], c = shipCost(t.sub, k); return { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : fmt(c) }; });
+  const payEntries = payKeys().map(k => ({ k, l: PAY_META[k].l, s: PAY_META[k].s, dis: k === 'cod' && st.ship !== 'lima', price: k === 'card' && surchargePct() > 0 ? '+' + surchargePct() + '%' : '' }));
+  const mSum = `<details class="sum-m"><summary><span>Resumen del pedido (${t.count})</span><b>${fmt(t.total)} ⌄</b></summary><div class="in">${summaryHTML(true)}</div></details>`;
+  return `<div class="co-page"><h1 class="sr">Finalizar compra</h1>
+    <a class="link" href="#/carrito">← Volver al carrito</a>
+    <div style="height:18px"></div>${mSum}
+    <div class="co-grid"><form class="form" data-form="order" novalidate>
+      <section class="co-card" aria-labelledby="h-datos"><h2 id="h-datos"><i>1</i>Tus datos</h2>
+        <div class="row2">${fld('nombres')}${fld('apellidos')}</div>
+        <div class="row2">${fld('phone')}${fld('email')}</div></section>
+      <section class="co-card" aria-labelledby="h-entrega"><h2 id="h-entrega"><i>2</i>Entrega</h2>
+        ${choiceHTML('ship', shipEntries, st.ship)}
+        ${st.ship === 'pick' ? '<div class="pay-note">Con recojo en punto no necesitas ingresar dirección. Te avisaremos por WhatsApp dónde y cuándo recoger.</div>' :
+          st.ship === 'prov' ? `<div class="row2">${fld('depto')}${fld('prov')}</div>${fld('distrito')}${fld('dir', '', 'Agencia y dirección de entrega')}${fld('ref')}` :
+          `${fld('distrito')}${fld('dir')}${fld('ref')}`}</section>
+      <section class="co-card" aria-labelledby="h-pago"><h2 id="h-pago"><i>3</i>Forma de pago</h2>
+        ${choiceHTML('pay', payEntries, st.pay)}${payNote(t)}</section>
+      <section class="co-card" aria-label="Detalles adicionales">
+        <label class="chk-line"><input type="checkbox" data-co-check="doc"${st.doc ? ' checked' : ''}> Necesito boleta o factura</label>
+        ${st.doc ? `<div class="seg" role="radiogroup" aria-label="Tipo de comprobante">
+          <label><input type="radio" name="docType" value="boleta" data-co-radio="docType"${st.docType === 'boleta' ? ' checked' : ''}><span>Boleta (DNI)</span></label>
+          <label><input type="radio" name="docType" value="factura" data-co-radio="docType"${st.docType === 'factura' ? ' checked' : ''}><span>Factura (RUC)</span></label></div>
+          ${st.docType === 'boleta' ? fld('dni') : `<div class="row2">${fld('ruc')}${fld('razon')}</div>`}` : ''}
+        ${fld('notes')}
+        <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label class="chk-line"><input type="checkbox" data-co-check="agree" id="agree"${st.agree ? ' checked' : ''}> Acepto los términos, la política de privacidad y la política de cambios</label>
+        <div class="fld ${st.err.agree ? 'err' : ''}"><div class="msg" id="e-agree" role="alert">${st.err.agree ? esc(st.err.agree) : ''}</div></div></section>
+      <div class="form-err" id="co-err" role="alert"></div>
+      <button class="btn block big" type="submit" id="co-submit">Confirmar pedido · ${fmt(t.total)}</button>
+    </form>
+    <aside class="summary co-side" aria-label="Resumen del pedido">${summaryHTML()}</aside></div></div>`;
 }
 function pageCheckout() {
-  if (cart.length && ui.co.step === 3) ui.co.step = 1;
-  if (!cart.length && ui.co.step !== 3) { location.replace('#/carrito'); return null; }
-  return { title: 'Checkout', html: checkoutView() };
+  if (!cart.length) { location.replace('#/carrito'); return null; }
+  return { title: 'Finalizar compra', html: checkoutView() };
+}
+function setBusy(on) {
+  ui.co.busy = on;
+  const b = $('#co-submit'); if (!b) return;
+  b.disabled = on; b.setAttribute('aria-busy', on);
+  b.textContent = on ? 'Enviando tu pedido…' : 'Confirmar pedido · ' + fmt(totals(ui.co.ship, ui.co.pay).total);
+}
+async function submitOrder(form) {
+  const st = ui.co;
+  if (st.busy) return;
+  const bad = validateAll();
+  st.err.agree = st.agree ? '' : 'Debes aceptar los términos para continuar';
+  if (bad.length || !st.agree) {
+    render(true);
+    const n = bad.length ? $('#f-' + bad[0]) : $('#agree'); if (n) n.focus();
+    return;
+  }
+  $('#co-err').textContent = '';
+  const f = st.f, g = k => (f[k] || '').trim();
+  const body = {
+    name: `${g('nombres')} ${g('apellidos')}`, phone: g('phone').replace(/\s/g, ''), email: g('email'),
+    items: cart.map(l => ({ id: l.id, opt: l.opt, qty: l.qty })),
+    ship: st.ship, address: { depto: g('depto'), prov: g('prov'), distrito: g('distrito'), dir: g('dir'), ref: g('ref') },
+    pay: st.pay, coupon: coupon ? coupon.code : '',
+    doc: st.doc ? (st.docType === 'boleta' ? { type: 'boleta', dni: g('dni') } : { type: 'factura', ruc: g('ruc'), razon: g('razon') }) : null,
+    notes: g('notes'), website: form.elements.website.value
+  };
+  const total = totals(st.ship, st.pay).total;
+  setBusy(true);
+  try {
+    const r = await shopApi('/api/orders', body);
+    const mine = store.get('mv_orders', []).filter(o => o.code !== r.code);
+    mine.unshift({ code: r.code, token: r.token, at: Date.now(), total });
+    store.set('mv_orders', mine.slice(0, 20));
+    const keep = { ...f }; delete keep.notes; delete keep.dni; delete keep.ruc; delete keep.razon;
+    store.set('mv_fields', keep);
+    try { sessionStorage.setItem('mv_fresh', r.code); } catch { /* sin almacenamiento */ }
+    cart = []; coupon = null; ui.couponMsg = null; saveCart();
+    st.agree = false; st.err = {}; st.f.notes = '';
+    location.hash = `#/pedido/${r.code}/${r.token}`;
+  } catch (e) {
+    setBusy(false);
+    const box = $('#co-err'); box.textContent = e.message; box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+}
+
+/* ---------- pedido (seguimiento, instrucciones de pago y comprobante) ---------- */
+const ORDER_FLOW = ['pending', 'review', 'paid', 'preparing', 'ready', 'delivered'];
+const flowOf = o => o.pay.method === 'cod' ? ['pending', 'preparing', 'ready', 'delivered'] : o.pay.method === 'card' ? ['pending', 'paid', 'preparing', 'ready', 'delivered'] : ORDER_FLOW;
+const stepLabel = (o, s) => ({
+  pending: o.pay.method === 'cod' ? 'Pedido recibido' : 'Esperando pago', review: 'Comprobante en revisión', paid: 'Pago confirmado', preparing: 'En preparación',
+  ready: o.delivery.ship === 'pick' ? 'Listo para recoger' : 'En camino', delivered: 'Entregado', cancelled: 'Cancelado'
+})[s];
+const when = iso => new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const statusAt = (o, s) => { const h = [...o.history].reverse().find(x => x.status === s); return h ? h.at : null; };
+function orderWa(o, extra) {
+  const lines = o.items.map(i => `• ${i.name}${i.opt ? ' (' + i.opt + ')' : ''} × ${i.qty}`).join('\n');
+  return `Hola Angie, soy ${o.customer.name}. Mi pedido es ${o.code} por ${fmt(o.totals.total)}:\n${lines}\nPago: ${PAY_META[o.pay.method].l}.${extra ? '\n' + extra : ''}`;
+}
+const copyRow = (label, value) => value ? `<div class="copy-row"><span>${esc(label)}</span><b>${esc(value)}</b><button type="button" class="link ul" data-act="copy" data-v="${esc(value)}">Copiar</button></div>` : '';
+function payPanel(o) {
+  const m = o.pay.method, cfg = PAYCFG[m] || {}, tot = fmt(o.totals.total);
+  const waAsk = txt => `<button class="btn wa" data-act="wa" data-msg="${esc(orderWa(o, txt))}">💬 ${m === 'card' ? 'Pedir mi link de pago' : 'Pedir los datos por WhatsApp'}</button>`;
+  if (o.status === 'cancelled') return '';
+  const paid = ORDER_FLOW.indexOf(o.status) >= 2;
+  if (m === 'cod') return `<section class="ord-card"><h2>Pago contra entrega</h2><p>Pagas <b>${tot}</b> en efectivo al recibir tu pedido. Si necesitas vuelto, avísanos por WhatsApp.</p></section>`;
+  if (paid) return `<section class="ord-card ok"><h2>✓ Pago confirmado</h2><p>¡Gracias! Ya estamos preparando tu pedido.</p></section>`;
+  if (m === 'card') return `<section class="ord-card"><h2>Pago con tarjeta</h2>
+    <p>Total a pagar: <b>${tot}</b>${o.totals.surcharge ? ` (incluye recargo de ${fmt(o.totals.surcharge)})` : ''}. Te enviaremos un link de pago seguro por WhatsApp para que pagues con tu tarjeta.</p>
+    ${waAsk('Quiero pagar con tarjeta, por favor envíame el link de pago.')}</section>`;
+  const info = m === 'yape'
+    ? (cfg.number ? `${copyRow('Número', cfg.number)}${copyRow('Titular', cfg.holder)}${cfg.qr ? `<img class="qr" src="${esc(cfg.qr)}" alt="Código QR de Yape" width="200" height="200">` : ''}` : '')
+    : (cfg.account || cfg.cci ? `${copyRow('Banco', cfg.bank)}${copyRow('Cuenta', cfg.account)}${copyRow('CCI', cfg.cci)}${copyRow('Titular', cfg.holder)}` : '');
+  return `<section class="ord-card"><h2>${m === 'yape' ? 'Paga con Yape o Plin' : 'Paga por transferencia'}</h2>
+    <p>Monto exacto: <b class="amt">${tot}</b></p>
+    ${info || `<p class="muted">Te enviamos los datos de pago por WhatsApp.</p>${waAsk('Quiero pagar, por favor envíame los datos de pago.')}`}
+    ${o.status === 'review' && o.proof ? `<div class="proof-ok">✓ Recibimos tu comprobante el ${esc(when(o.proof.at))}. Lo estamos revisando; te avisaremos por WhatsApp.</div>` : ''}
+    <div class="proof">
+      <label class="btn${o.status === 'review' ? ' ghost' : ''}" id="proof-btn"><span>${o.status === 'review' ? 'Subir otro comprobante' : '📎 Subir comprobante de pago'}</span><input type="file" accept="image/*" data-proof hidden></label>
+      <span class="muted small">Sube la captura o foto de tu pago (JPG, PNG o WebP).</span></div></section>`;
+}
+function trackHTML(o) {
+  if (o.status === 'cancelled') return `<div class="cancel-note"><b>Pedido cancelado.</b> ${o.cancelNote ? esc(o.cancelNote) + '. ' : ''}Si ya habías pagado, escríbenos por WhatsApp para devolverte tu dinero.</div>`;
+  const rank = ORDER_FLOW.indexOf(o.status), flow = flowOf(o);
+  let cur = 0; flow.forEach((s, i) => { if (ORDER_FLOW.indexOf(s) <= rank) cur = i; });
+  const last = flow[cur] === 'delivered';
+  return `<ol class="track-list" aria-label="Estado del pedido">${flow.map((s, i) => { const at = statusAt(o, s), done = i < cur || (i === cur && last);
+    return `<li class="${done ? 'done' : i === cur ? 'cur' : ''}"${i === cur ? ' aria-current="step"' : ''}><i aria-hidden="true">${done ? '✓' : i + 1}</i><span>${esc(stepLabel(o, s))}</span>${at && i <= cur ? `<small>${esc(when(at))}</small>` : ''}</li>`; }).join('')}</ol>`;
+}
+function orderHTML(o, fresh) {
+  const t = o.totals, d = o.delivery;
+  return `<div class="ord-head">${fresh ? '<div class="check" aria-hidden="true">✓</div>' : ''}
+      <h1 class="script">${fresh ? '¡Gracias por tu pedido, ' + esc(o.customer.name.split(' ')[0]) + '!' : 'Tu pedido'}</h1>
+      <div class="muted">Pedido <b class="code">${esc(o.code)}</b> · ${esc(when(o.createdAt))}</div></div>
+    <div class="ord-grid"><div class="ord-main">
+      <section class="ord-card"><h2>Estado</h2>${trackHTML(o)}</section>
+      ${payPanel(o)}
+      <section class="ord-card"><h2>Entrega</h2><p><b>${esc(d.label)}</b>${d.district ? ' · ' + esc(d.district) : ''}<br><span class="muted">${d.ship === 'pick' ? 'Te avisaremos por WhatsApp dónde recoger.' : 'Plazo estimado: ' + esc(d.eta) + ' desde la confirmación del pago.'}</span></p></section>
+    </div>
+    <aside class="summary" aria-label="Resumen del pedido"><h2>Resumen</h2>
+      ${o.items.map(i => `<div class="sum-line"><div class="ph${i.img ? ' has-img' : ''}">${i.img ? `<img src="${esc(i.img)}" alt="">` : ''}</div><div class="t"><b>${esc(i.name)}</b><br><span class="muted">${i.opt ? esc(i.opt) + ' · ' : ''}Cant. ${i.qty}</span></div><b>${fmt(i.price * i.qty)}</b></div>`).join('')}
+      <div class="srow" style="border-top:1px solid var(--line);padding-top:12px"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
+      ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(t.coupon)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
+      <div class="srow"><span>Envío</span><span>${t.ship === 0 ? 'Gratis' : fmt(t.ship)}</span></div>
+      ${t.surcharge ? `<div class="srow"><span>Recargo tarjeta (${t.surchargePct}%)</span><span>${fmt(t.surcharge)}</span></div>` : ''}
+      <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
+      <button class="btn wa block" data-act="wa" data-msg="${esc(orderWa(o, 'Tengo una consulta sobre mi pedido.'))}">💬 Consultar por WhatsApp</button>
+      <button class="link" data-act="order-refresh">↻ Actualizar estado</button>
+      <a class="link" href="#/">← Seguir comprando</a>
+    </aside></div>`;
+}
+let ordCtx = null;
+async function loadOrder(code, token, fresh) {
+  const box = $('#ord-box'); if (!box) return;
+  let o;
+  try {
+    const r = await fetch(`/api/orders?c=${encodeURIComponent(code)}&t=${encodeURIComponent(token)}`, { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'No encontramos este pedido');
+    o = j.order;
+  } catch (e) {
+    if ($('#ord-box') !== box) return;
+    box.innerHTML = `<div class="empty-cart"><div class="script">${esc(e instanceof TypeError ? 'No hay conexión' : e.message)}</div><p class="muted">Revisa el enlace de tu pedido o escríbenos por WhatsApp.</p><a class="btn" href="#/">Ir al inicio</a></div>`;
+    return;
+  }
+  if ($('#ord-box') !== box) return;
+  ordCtx = { code, token, o, fresh };
+  box.innerHTML = orderHTML(o, fresh);
+  document.title = 'Pedido ' + o.code + ' · Mamá Virtuosa';
+}
+function pageOrder(code, token) {
+  let fresh = false;
+  try { fresh = sessionStorage.getItem('mv_fresh') === code; if (fresh) sessionStorage.removeItem('mv_fresh'); } catch { /* sin almacenamiento */ }
+  return { title: 'Tu pedido', html: `<div class="ord-page" id="ord-box"><div class="ord-loading" role="status">Cargando tu pedido…</div></div>`, after: () => loadOrder(code, token, fresh) };
+}
+function pageMyOrders() {
+  const mine = store.get('mv_orders', []);
+  return { title: 'Mis pedidos', html: `<div class="ord-page"><h1 class="script">Mis pedidos</h1>
+    ${mine.length ? `<p class="muted">Pedidos hechos desde este dispositivo.</p><div class="my-orders">${mine.map(o => `<a class="my-order" href="#/pedido/${esc(o.code)}/${esc(o.token)}"><b>${esc(o.code)}</b><span class="muted">${esc(new Date(o.at).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }))}</span><b>${fmt(o.total)}</b><span aria-hidden="true">→</span></a>`).join('')}</div>`
+      : `<div class="empty-cart"><div class="script">Aún no tienes pedidos aquí</div><p class="muted">Cuando compres, tu pedido aparecerá en esta lista. Si compraste desde otro dispositivo, usa el enlace que te dimos al confirmar.</p><a class="btn" href="#/">Ir a la tienda</a></div>`}</div>` };
+}
+async function sendProof(file) {
+  const btn = $('#proof-btn'), o = ordCtx; if (!file || !o || !btn) return;
+  const label = $('span', btn), old = label.textContent;
+  label.textContent = 'Subiendo…'; btn.setAttribute('aria-busy', 'true');
+  try {
+    const img = await shrinkImage(file);
+    await shopApi('/api/orders?op=proof', { c: o.code, t: o.token, img });
+    toast('✓ Comprobante enviado. Lo revisaremos pronto.');
+    await loadOrder(o.code, o.token, o.fresh);
+  } catch (e) { toast(e.message); label.textContent = old; btn.removeAttribute('aria-busy'); }
+}
+function shrinkImage(file, max = 1400) {
+  return new Promise((ok, no) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); no(new Error('No pudimos leer esa imagen. Prueba con otra captura.')); };
+    img.src = url;
+  });
 }
 
 /* ---------- podcast ---------- */
@@ -517,7 +759,7 @@ function openMega(k) {
   if (ui.mega === k) return;
   ui.mega = k;
   const p = m.promo && P(m.promo.id);
-  box.innerHTML = m.cols.map(c => `<div><h3>${esc(c.t)}</h3><ul>${c.l.map(l => `<li><a href="${catHref(k, (c.kind === 'goal' ? 'beneficio:' : '') + l)}">${esc(l)}</a></li>`).join('')}</ul></div>`).join('') +
+  box.innerHTML = m.cols.map(c => `<div><h3>${esc(c.t)}</h3><ul>${c.l.map(l => `<li><a href="${catHref(k, c.fid ? 'f~' + c.fid + '~' + l : l)}">${esc(l)}</a></li>`).join('')}</ul></div>`).join('') +
     (!p ? '' : `<a class="promo-card" href="#/producto/${p.id}" style="background:${p.tone}"><div class="ph${pics(p).length ? ' has-img' : ''}" aria-hidden="true">${pics(p).length ? `<img src="${esc(pics(p)[0])}" alt="">` : '[foto destacada]'}</div>
       <div class="txt"><div class="eyebrow">Destacado</div><div class="name">${esc(p.name)}</div><div class="sub">${esc(m.promo.s)}</div></div></a>`);
   box.hidden = false;
@@ -545,14 +787,14 @@ function markNav(seg) {
 /* ---------- menú móvil ---------- */
 function buildDrawer() {
   $('#drawer-body').innerHTML = D.catOrder.map((c, i) => {
-    const cf = (D.catFilter || {})[c] || {};
-    const subs = cf.options && cf.options.length ? cf.options : [...new Set(D.products.filter(p => p.cat === c).map(p => p.sub))];
+    const f1 = filtersOf(c)[0];
+    const subs = f1 ? f1.options.filter(o => D.products.some(p => p.cat === c && p.stock > 0 && pvals(p, f1).includes(o))) : [...new Set(D.products.filter(p => p.cat === c).map(p => p.sub).filter(Boolean))];
     return `<div class="d-item"><button data-act="d-acc" aria-expanded="false" aria-controls="ds-${i}"><span>${esc(c)}</span><span aria-hidden="true">⌄</span></button>
       <div class="d-sub" id="ds-${i}" hidden>${subs.map(s => `<a href="${catHref(c, s)}" data-act="drawer-close">${esc(s)}</a>`).join('')}<a href="${catHref(c)}" data-act="drawer-close"><b>Ver todo ${esc(c)}</b></a></div></div>`;
   }).join('') +
     `<div class="d-item"><a href="#/podcast" data-act="drawer-close">🎙 Podcast</a></div>
      <div class="d-item"><a href="#/ofertas" data-act="drawer-close" style="color:var(--plum)">Ofertas</a></div>
-     <div class="d-foot"><a href="#" data-act="account">Mi cuenta · Mis pedidos</a><a href="#/ayuda/envios" data-act="drawer-close">Ayuda</a><a href="#" data-act="wa">WhatsApp</a></div>`;
+     <div class="d-foot"><a href="#/pedidos" data-act="drawer-close">Mis pedidos</a><a href="#/ayuda/envios" data-act="drawer-close">Ayuda</a><a href="#" data-act="wa">WhatsApp</a></div>`;
 }
 let drawerOpener = null;
 function openDrawer() {
@@ -583,6 +825,8 @@ function render(keepScroll) {
     case 'producto': r = pageProduct(seg[1]); break;
     case 'carrito': r = pageCart(); break;
     case 'checkout': r = pageCheckout(); break;
+    case 'pedido': r = pageOrder(seg[1], seg[2]); break;
+    case 'pedidos': r = pageMyOrders(); break;
     case 'podcast': r = pagePodcast(); break;
     case 'ayuda': r = pageHelp(seg[1]); break;
     default: r = pageNotFound();
@@ -616,7 +860,6 @@ const actions = {
   'd-acc'(el) { const open = el.getAttribute('aria-expanded') === 'true'; el.setAttribute('aria-expanded', !open); $('#' + el.getAttribute('aria-controls')).hidden = open; },
   'search-toggle'(el) { const f = $('#search-form'); const o = f.classList.toggle('open'); el.setAttribute('aria-expanded', o); if (o) $('#search-input').focus(); },
   'filters-toggle'(el) { const o = $('#filters').classList.toggle('open'); el.setAttribute('aria-expanded', o); },
-  account() { toast('Las cuentas de cliente estarán disponibles pronto'); closeDrawer(); },
   toast(el) { toast(el.dataset.msg); },
   wa(el) { window.open(waLink(el.dataset.msg), '_blank', 'noopener'); },
   social(el) {
@@ -626,14 +869,21 @@ const actions = {
   'pdp-qty'(el) { const p = P(currentProductId()); ui.pdp.qty = Math.max(1, Math.min(p.stock, ui.pdp.qty + (+el.dataset.d))); syncPDP(); },
   'pdp-opt'(el) { ui.pdp.opt = el.dataset.v; syncPDP(); },
   'pdp-img'(el) { ui.pdp.img = +el.dataset.i; syncPDP(); },
-  'pdp-add'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); location.hash = '#/carrito'; },
-  'pdp-buy'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); ui.co.step = 1; location.hash = '#/checkout'; },
-  'line-qty'(el) { const l = cart[+el.dataset.i], p = P(l.id); l.qty = Math.max(1, Math.min(p.stock, l.qty + (+el.dataset.d))); saveCart(); rerenderKeepFocus(); },
+  'pdp-add'() {
+    const capped = addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty);
+    toast(capped ? 'Agregado. Es el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '#/carrito', label: 'Ver carrito' });
+  },
+  'pdp-buy'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); location.hash = '#/checkout'; },
+  'line-qty'(el) { const l = cart[+el.dataset.i], p = P(l.id); l.qty = Math.max(1, Math.min(maxQty(p), l.qty + (+el.dataset.d))); saveCart(); rerenderKeepFocus(); },
   'line-rm'(el) { cart.splice(+el.dataset.i, 1); saveCart(); render(true); },
-  'to-checkout'() { ui.co.step = 1; },
-  'pick-ship'(el) { ui.co.ship = el.dataset.k; if (ui.co.ship === 'prov' && ui.co.pay === 'cod') ui.co.pay = 'card'; ui.co.err = {}; rerenderKeepFocus(); },
+  'pick-ship'(el) {
+    ui.co.ship = el.dataset.k;
+    if (ui.co.ship !== 'lima' && ui.co.pay === 'cod') ui.co.pay = payKeys().find(k => k !== 'cod') || 'yape';
+    ui.co.err = {}; rerenderKeepFocus();
+  },
   'pick-pay'(el) { if (ui.co.pay !== el.dataset.k) { ui.co.pay = el.dataset.k; rerenderKeepFocus(); } },
-  'goto-step1'() { ui.co.step = 1; ui.co.err = {}; render(); },
+  copy(el) { (navigator.clipboard ? navigator.clipboard.writeText(el.dataset.v) : Promise.reject()).then(() => toast('Copiado: ' + el.dataset.v), () => toast('No se pudo copiar. Selecciónalo y cópialo a mano')); },
+  'order-refresh'() { if (ordCtx) { toast('Estado actualizado'); loadOrder(ordCtx.code, ordCtx.token, ordCtx.fresh); } },
   play(el) { togglePlay(+el.dataset.i); },
   'play-current'() { togglePlay(ui.playing !== null ? ui.playing : 0); },
   topic(el) { ui.topic = el.dataset.t; $('#eps').innerHTML = pageEpisodesList(); $$('.topics .pill').forEach(b => { const on = b.dataset.t === ui.topic; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); playerSync(); }
@@ -644,30 +894,45 @@ document.addEventListener('click', e => {
   const fn = actions[el.dataset.act];
   if (!fn) return;
   if (el.tagName === 'A' && el.getAttribute('href') === '#') e.preventDefault();
-  if (el.dataset.act === 'wa' || el.dataset.act === 'social' || el.dataset.act === 'account') e.preventDefault();
+  if (el.dataset.act === 'wa' || el.dataset.act === 'social') e.preventDefault();
   fn(el);
 });
 
 /* ---------- formularios y filtros ---------- */
 document.addEventListener('input', e => {
   const t = e.target;
-  if (t.dataset.co) ui.co.f[t.dataset.co] = t.value;
-  if (t.id === 'cc-num') { const d = t.value.replace(/\D/g, '').slice(0, 19); t.value = d.replace(/(.{4})/g, '$1 ').trim(); }
-  if (t.id === 'cc-exp') { let d = t.value.replace(/\D/g, '').slice(0, 4); if (d.length > 2) d = d.slice(0, 2) + '/' + d.slice(2); t.value = d; }
+  if (t.dataset.co) {
+    ui.co.f[t.dataset.co] = t.value;
+    if (!['notes', 'dni', 'ruc', 'razon'].includes(t.dataset.co)) store.set('mv_fields', Object.fromEntries(Object.entries(ui.co.f).filter(([k]) => !['notes', 'dni', 'ruc', 'razon'].includes(k))));
+    if (t.closest('[data-fld]').classList.contains('err') && !fieldError(t.dataset.co)) showErr(t.dataset.co, '');
+  }
   if (t.dataset.f === 'min') { F.min = +t.value; if (F.min > F.max) { F.max = F.min; $('[data-f=max]').value = F.max; } updateGrid(); }
   if (t.dataset.f === 'max') { F.max = +t.value; if (F.max < F.min) { F.min = F.max; $('[data-f=min]').value = F.min; } updateGrid(); }
 });
 document.addEventListener('change', e => {
   const t = e.target, f = t.dataset.f;
-  if (t.dataset.coCheck) { ui.co[t.dataset.coCheck] = t.checked; if (t.dataset.coCheck === 'ruc') { ui.co.err = {}; render(true); } return; }
+  if (t.dataset.coCheck) {
+    ui.co[t.dataset.coCheck] = t.checked;
+    if (t.dataset.coCheck === 'doc') { ui.co.err = {}; render(true); const n = $('#f-dni') || $('#f-ruc'); if (t.checked && n) n.focus(); }
+    if (t.dataset.coCheck === 'agree' && t.checked) { const m = $('#e-agree'); if (m) { m.textContent = ''; m.parentElement.classList.remove('err'); } }
+    return;
+  }
+  if (t.dataset.coRadio) { ui.co[t.dataset.coRadio] = t.value; ui.co.err = {}; render(true); const r = $(`[data-co-radio][value="${t.value}"]`); if (r) r.focus(); return; }
+  if (t.dataset.proof !== undefined) { sendProof(t.files[0]); t.value = ''; return; }
   if (!f || !F) return;
   if (f === 'sub') { t.checked ? F.subs.add(t.value) : F.subs.delete(t.value); }
-  if (f === 'goal') { t.checked ? F.goals.add(t.value) : F.goals.delete(t.value); }
+  if (f === 'fopt') { t.checked ? F.sel[t.dataset.fid].add(t.value) : F.sel[t.dataset.fid].delete(t.value); }
+  if (f === 'fall') { F.sel[t.dataset.fid].clear(); }
   if (f === 'subs-all') { F.subs.clear(); }
   if (f === 'age') { t.checked ? F.ages.add(t.value) : F.ages.delete(t.value); }
   if (f === 'offers') F.offers = t.checked;
   if (f === 'sort') F.sort = t.value;
   updateGrid();
+});
+document.addEventListener('focusout', e => {
+  const t = e.target;
+  if (!t.dataset || !t.dataset.co || !applies(t.dataset.co)) return;
+  showErr(t.dataset.co, fieldError(t.dataset.co));
 });
 document.addEventListener('submit', e => {
   const form = e.target, kind = form.dataset.form;
@@ -681,30 +946,11 @@ document.addEventListener('submit', e => {
   if (!kind) return;
   e.preventDefault();
   if (kind === 'coupon') {
-    const code = new FormData(form).get('code').trim().toUpperCase();
-    if (!code) { coupon = ''; ui.couponMsg = null; }
-    else if (C.coupons[code]) { coupon = code; ui.couponMsg = { ok: true, t: `Cupón ${code} aplicado: ${Math.round(C.coupons[code] * 100)}% de descuento` }; }
-    else { coupon = ''; ui.couponMsg = { ok: false, t: 'El cupón no es válido' }; }
-    saveCart(); render(true); return;
+    const btn = $('button', form); btn.disabled = true; btn.textContent = '…';
+    applyCoupon(new FormData(form).get('code')).then(() => rerenderKeepFocus());
+    return;
   }
-  if (kind === 'step1') {
-    const bad = validateStep1();
-    if (bad.length) { render(true); const n = $('#f-' + bad[0]); if (n) n.focus(); return; }
-    ui.co.step = 2; render(); return;
-  }
-  if (kind === 'step2') {
-    const st = ui.co; st.err = {};
-    if (st.ruc) { ['ruc', 'razon'].forEach(k => { const v = (st.f[k] || '').trim(); if (!v) st.err[k] = 'Completa este campo'; else if (FIELDS[k].test && !FIELDS[k].test(v)) st.err[k] = FIELDS[k].msg; }); }
-    if (!st.agree) st.err.agree = 'Debes aceptar los términos para continuar';
-    if (st.pay === 'card') {
-      const num = $('#cc-num').value.replace(/\D/g, ''), exp = $('#cc-exp').value, cvv = $('#cc-cvv').value, nm = $('#cc-name').value.trim();
-      if (num.length < 13 || !/^(0[1-9]|1[0-2])\/\d{2}$/.test(exp) || !/^\d{3,4}$/.test(cvv) || !nm) { toast('Revisa los datos de tu tarjeta'); (num.length < 13 ? $('#cc-num') : !/^(0[1-9]|1[0-2])\/\d{2}$/.test(exp) ? $('#cc-exp') : !/^\d{3,4}$/.test(cvv) ? $('#cc-cvv') : $('#cc-name')).focus(); return; }
-    }
-    if (Object.keys(st.err).length) { render(true); const n = $('#f-' + Object.keys(st.err)[0]) || $('#agree'); if (n) n.focus(); return; }
-    const t = totals(st.ship), n = store.get('mv_order_n', 122) + 1; store.set('mv_order_n', n);
-    st.order = { no: String(n).padStart(6, '0'), email: st.f.email, eta: st.ship === 'lima' ? '2–4 días' : st.ship === 'prov' ? '4–7 días' : '24 horas', ship: D.shipping[st.ship].l, pay: D.payments[st.pay].l, total: t.total };
-    cart = []; coupon = ''; ui.couponMsg = null; saveCart(); st.step = 3; render(); return;
-  }
+  if (kind === 'order') submitOrder(form);
 });
 
 /* ---------- arranque ---------- */

@@ -1,6 +1,13 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "tienda", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "5173"], "port": 5173 }
+    {
+      "name": "tienda",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "dev-server.js"
+      ],
+      "port": 5173
+    }
   ]
 }

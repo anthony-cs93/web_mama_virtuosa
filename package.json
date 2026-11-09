@@ -2,6 +2,7 @@
   "name": "mama-virtuosa",
   "private": true,
   "scripts": {
+    "dev": "node dev-server.js",
     "build:admin": "esbuild admin/blob-entry.js --bundle --format=esm --platform=browser --minify --outfile=admin/blob-client.js"
   },
   "type": "module",

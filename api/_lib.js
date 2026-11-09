@@ -1,11 +1,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { list, put, del } from '@vercel/blob';
 
 const COOKIE = 'mv_admin';
 const SESSION_SECS = 12 * 3600;
 const STORE_PATH = 'store.json';
+/* Sin Blob y fuera de Vercel (npm run dev) todo se guarda en la carpeta .data/ */
+export const LOCAL = !process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL;
+export const LOCAL_DIR = join(process.cwd(), '.data');
 
 /* ---------- sesión (cookie firmada, sin base de datos) ---------- */
 const secret = () => process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || '';
@@ -43,19 +46,91 @@ export function requireAdmin(req, res, { write = false } = {}) {
 export async function readSeed() {
   return JSON.parse(await readFile(join(process.cwd(), 'data', 'store.json'), 'utf8'));
 }
+/* Modelo único de filtros: data.catFilters[categoría] = [{ id, name, multi, options[] }]; cada producto guarda p.f[id] = [valores].
+   Convierte los datos antiguos (subcategoría + «Por beneficio») la primera vez que se leen. */
+export function migrateFilters(store) {
+  const d = store && store.data;
+  if (!d || d.catFilters) return store;
+  const old = d.catFilter || {}, oldGoals = d.catGoals || {};
+  d.catFilters = {};
+  for (const c of d.catOrder || []) {
+    const list = [], cf = old[c] || {}, gl = oldGoals[c] || [];
+    const prods = d.products.filter(p => p.cat === c);
+    const used = [...new Set(prods.map(p => p.sub).filter(Boolean))];
+    const opts = cf.options && cf.options.length ? [...cf.options, ...used.filter(u => !cf.options.includes(u))] : used;
+    const hasSub = opts.length > 0 || !!cf.label;
+    if (hasSub) list.push({ id: 'sub', name: cf.label || 'Subcategoría', multi: false, options: opts });
+    if (gl.length) list.push({ id: 'ben', name: 'Por beneficio', multi: true, options: [...gl] });
+    d.catFilters[c] = list;
+    for (const p of prods) {
+      const f = {};
+      if (hasSub && p.sub) f.sub = [p.sub];
+      if (gl.length && p.goals && p.goals.length) f.ben = p.goals.filter(g => gl.includes(g));
+      if (Object.keys(f).length) p.f = f;
+      delete p.goals;
+    }
+    for (const col of (d.mega && d.mega[c] && d.mega[c].cols) || []) { if (col.kind === 'goal') col.fid = 'ben'; delete col.kind; }
+  }
+  delete d.catFilter; delete d.catGoals; delete d.goals;
+  return store;
+}
+/* Medios de pago: valores por defecto; lo que guarde el panel se mezcla encima */
+export const PAY_DEFAULTS = {
+  yape: { on: true, number: '', holder: '', qr: '' },
+  bank: { on: true, bank: 'BCP', account: '', cci: '', holder: '' },
+  card: { on: true, surcharge: 0 },
+  cod: { on: true }
+};
+/* Cupones: { CÓDIGO: { type: 'pct' | 'amt', value, min, expires: 'AAAA-MM-DD' | '', active } }. El formato antiguo era { CÓDIGO: 0.1 } */
+export function normCoupons(src) {
+  const out = {};
+  for (const [code, v] of Object.entries(src || {})) {
+    const c = String(code).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24);
+    if (!c) continue;
+    if (typeof v === 'number') { if (v > 0 && v <= 0.9) out[c] = { type: 'pct', value: Math.round(v * 100), min: 0, expires: '', active: true }; continue; }
+    if (!v || typeof v !== 'object') continue;
+    const type = v.type === 'amt' ? 'amt' : 'pct';
+    const n = Number(v.value) || 0;
+    const value = type === 'pct' ? Math.min(90, Math.round(n)) : Math.round(n * 100) / 100;
+    if (value <= 0) continue;
+    out[c] = { type, value, min: Math.max(0, Number(v.min) || 0), expires: /^\d{4}-\d{2}-\d{2}$/.test(v.expires || '') ? v.expires : '', active: v.active !== false };
+  }
+  return out;
+}
+export function migrateConfig(store) {
+  const c = store && store.config;
+  if (!c || typeof c !== 'object') return store;
+  const txt = (v, n) => String(v ?? '').trim().slice(0, n);
+  const src = c.pay && typeof c.pay === 'object' ? c.pay : {};
+  const pay = {};
+  for (const [k, def] of Object.entries(PAY_DEFAULTS)) {
+    const o = { ...def, ...(src[k] && typeof src[k] === 'object' ? src[k] : {}) };
+    for (const f of Object.keys(def)) if (typeof def[f] === 'string') o[f] = txt(o[f], 200);
+    o.on = o.on !== false;
+    if (k === 'card') o.surcharge = Math.min(15, Math.max(0, Math.round((Number(o.surcharge) || 0) * 100) / 100));
+    pay[k] = o;
+  }
+  c.pay = pay;
+  c.coupons = normCoupons(c.coupons);
+  return store;
+}
 export async function readStore() {
+  if (LOCAL) {
+    try { return { store: migrateConfig(migrateFilters(JSON.parse(await readFile(join(LOCAL_DIR, 'store.json'), 'utf8')))), fromBlob: false }; } catch { /* sin copia local: se usa la semilla */ }
+  }
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { blobs } = await list({ prefix: STORE_PATH, limit: 1 });
     const b = blobs.find(x => x.pathname === STORE_PATH);
     if (b) {
       const r = await fetch(b.url + '?t=' + Date.now(), { cache: 'no-store' });
-      if (r.ok) return { store: await r.json(), fromBlob: true };
+      if (r.ok) return { store: migrateConfig(migrateFilters(await r.json())), fromBlob: true };
     }
   }
-  return { store: await readSeed(), fromBlob: false };
+  return { store: migrateConfig(migrateFilters(await readSeed())), fromBlob: false };
 }
 export async function writeStore(store) {
   const body = JSON.stringify(store, null, 2);
+  if (LOCAL) { await mkdir(LOCAL_DIR, { recursive: true }); await writeFile(join(LOCAL_DIR, 'store.json'), body); return; }
   const opts = { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json' };
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
   await put(`backups/store-${stamp}.json`, body, { ...opts, cacheControlMaxAge: 60 });

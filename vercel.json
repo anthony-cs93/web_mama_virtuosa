@@ -1,6 +1,13 @@
 {
   "functions": {
-    "api/data.js": { "includeFiles": "data/store.json" },
-    "api/store.js": { "includeFiles": "data/store.json" }
+    "api/data.js": {
+      "includeFiles": "data/store.json"
+    },
+    "api/store.js": {
+      "includeFiles": "data/store.json"
+    },
+    "api/orders.js": {
+      "includeFiles": "data/store.json"
+    }
   }
 }

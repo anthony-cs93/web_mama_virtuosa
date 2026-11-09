@@ -10,12 +10,12 @@ Tienda para mamá y peques: belleza, bebé y niños, ropa infantil, gomitas salu
 | Estilos | CSS plano con variables (`css/styles.css`), sin preprocesador ni framework |
 | Lógica | JavaScript vanilla (ES2020) en el navegador; funciones Node en `api/` |
 | Navegación | SPA con rutas por hash (`#/…`) |
-| Persistencia | `localStorage` (carrito, cupón, contador de pedidos) |
+| Persistencia | `localStorage` (carrito, cupón, datos del cliente, pedidos del dispositivo); pedidos en Vercel Blob |
 | Fuentes | Google Fonts (Quicksand, Sacramento) |
 | Hosting | Vercel (sitio estático + funciones en `api/`) |
 | Datos del catálogo y archivos | Vercel Blob (`store.json`, fotos y audios) |
 
-Solo la tienda, sin panel: `python -m http.server 5173` (sin `/api`, el catálogo no carga). Para probar todo en local: `npm i -g vercel`, `vercel link`, `vercel env pull` y `vercel dev`.
+Probar todo en local: `npm install` y `npm run dev` (tienda en `http://localhost:5173`, panel en `/admin/` con clave `dev`). Sin Vercel Blob, catálogo y pedidos se guardan en `.data/` (ignorada por git). Con los datos reales: `npm i -g vercel`, `vercel link`, `vercel env pull` y `vercel dev`.
 
 ## Panel de administración (`/admin/`)
 
@@ -24,7 +24,8 @@ Solo la tienda, sin panel: `python -m http.server 5173` (sin `/api`, el catálog
 | Productos | Crear, editar, duplicar, eliminar; precio, precio anterior, stock, etiqueta, edades, opciones (talla/color), descripción, cuidados; subir varias fotos (se reducen a 1400 px); reordenar arrastrando o con flechas; destacar en «Más vendidos» |
 | Categorías | Crear, renombrar, ordenar, eliminar; color, textos, columnas del menú desplegable y producto destacado |
 | Podcast | Episodios con título, fecha, duración, tema, producto mencionado y audio; reordenar; temas |
-| Ajustes | WhatsApp, redes, envío gratis, costos de envío, cupones, páginas de ayuda |
+| Pedidos | Lista con filtros y contador de pagos por confirmar; detalle, comprobante, confirmar pago, cambiar estado, cancelar, WhatsApp al cliente (ver [docs/ventas-y-pedidos.md](docs/ventas-y-pedidos.md)) |
+| Ajustes | WhatsApp, redes, envío gratis, costos de envío, **medios de pago** (Yape/Plin, transferencia, tarjeta con recargo, contra entrega), **cupones** (% o S/, mínimo, vencimiento), páginas de ayuda |
 
 ### Cómo funciona
 
@@ -38,7 +39,7 @@ Solo la tienda, sin panel: `python -m http.server 5173` (sin `/api`, el catálog
 
 1. Importar el repositorio en Vercel.
 2. Storage → Create → **Blob** (acceso público) y conectarlo al proyecto: agrega `BLOB_READ_WRITE_TOKEN` solo.
-3. Settings → Environment Variables: `ADMIN_PASSWORD` (tu contraseña) y `SESSION_SECRET` (texto largo aleatorio).
+3. Settings → Environment Variables: `ADMIN_PASSWORD` (tu contraseña) y `SESSION_SECRET` (texto largo aleatorio). Opcional, para recibir avisos de pedidos por correo: `RESEND_API_KEY` y `ORDERS_NOTIFY_EMAIL`.
 4. Desplegar y entrar a `https://<tu-dominio>/admin/`.
 
 ## Estructura
@@ -46,8 +47,10 @@ Solo la tienda, sin panel: `python -m http.server 5173` (sin `/api`, el catálog
 ```
 index.html        Estructura base: cabecera, nav, <main id="app">, pie, menú móvil
 css/styles.css    Tokens, componentes y responsive
-js/app.js         Router, páginas, carrito, checkout, podcast, filtros
-api/              Funciones de Vercel: data.js (público), login, logout, session, store, upload; _lib.js (utilidades)
+js/app.js         Router, páginas, carrito, checkout, pedidos, podcast, filtros
+api/              Funciones de Vercel: data.js (público), orders (pedidos, público), orders-admin, login, logout, session, store, upload; _lib.js y _orders.js (lógica)
+dev-server.js     Servidor local (npm run dev)
+docs/             ventas-y-pedidos.md: carrito, checkout, pagos y panel de pedidos
 admin/            Panel de administración (index.html, admin.css, admin.js)
 data/store.json   Datos iniciales del catálogo (semilla); luego manda el Blob
 vercel.json       Incluye data/store.json en las funciones
@@ -64,7 +67,9 @@ package.json      Dependencia @vercel/blob
 | `#/buscar/<texto>` | Resultados de búsqueda |
 | `#/producto/<id>` | Detalle de producto |
 | `#/carrito` | Carrito |
-| `#/checkout` | Datos → Pago → Listo |
+| `#/checkout` | Datos, entrega y pago en una página |
+| `#/pedido/<código>/<token>` | Seguimiento del pedido, instrucciones de pago y comprobante |
+| `#/pedidos` | Pedidos hechos desde este dispositivo |
 | `#/podcast` | Podcast y reproductor |
 | `#/ayuda/envios`, `#/ayuda/cambios` | Páginas de ayuda |
 
@@ -108,9 +113,10 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 
 ## Reglas de negocio
 
-- Envío gratis en Lima desde S/ 150 (`freeShippingFrom` en `config.js`). Delivery Lima S/ 10, provincia S/ 15, recojo gratis.
-- Cupón `BIENVENIDA10`: 10 % sobre el subtotal (`coupons` en `config.js`).
-- Pago contra entrega solo en Lima.
+- Envío gratis en Lima desde S/ 150 (`freeShippingFrom`). Delivery Lima S/ 10, provincia S/ 15, recojo gratis (editable en Ajustes).
+- Cupón `BIENVENIDA10`: 10 % sobre el subtotal de productos. Los cupones se validan en el servidor y no se publican.
+- El servidor recalcula precios, envío, cupón y recargo de cada pedido; nunca confía en el navegador.
+- Pago contra entrega solo en Lima. Tarjeta: link de pago por WhatsApp, con recargo opcional.
 - Cambios hasta 7 días.
 
 ## Configuración pendiente
@@ -118,12 +124,13 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 - Ajustes (panel → Ajustes): ya tiene WhatsApp (+51 940 395 933), Instagram (@mama.virtuosa3110) y TikTok (@mama.virtuosa). Faltan Facebook, Spotify, Apple y YouTube.
 - Stock, descripciones y textos de cuidados son de ejemplo: edítalos en el panel. Fotos reales y audio de episodios se suben desde el panel.
 
-## Límites actuales (sin backend)
+## Límites actuales
 
-- No se procesan pagos ni se guardan pedidos: al confirmar solo se muestra la pantalla de agradecimiento.
-- Newsletter y "Mi cuenta" solo muestran un aviso.
-- El reproductor simula la reproducción si el episodio no tiene `audio`.
+- Los pedidos y comprobantes se guardan y se gestionan en el panel, pero **no se cobra online**: Yape/transferencia con comprobante y tarjeta con link por WhatsApp.
+- El stock no se descuenta solo al vender; se valida al crear el pedido.
+- Newsletter solo muestra un aviso. El reproductor simula la reproducción si el episodio no tiene `audio`.
 - No hay reseñas ni calificaciones: se omitieron a propósito para no mostrar datos falsos.
+- Pendiente cargar en Ajustes → Medios de pago el número de Yape, la cuenta y el CCI reales.
 
 ## Origen del diseño
 

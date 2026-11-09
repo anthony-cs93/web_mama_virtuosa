@@ -12,7 +12,35 @@
     },
     "freeShippingFrom": 150,
     "coupons": {
-      "BIENVENIDA10": 0.1
+      "BIENVENIDA10": {
+        "type": "pct",
+        "value": 10,
+        "min": 0,
+        "expires": "",
+        "active": true
+      }
+    },
+    "pay": {
+      "yape": {
+        "on": true,
+        "number": "",
+        "holder": "",
+        "qr": ""
+      },
+      "bank": {
+        "on": true,
+        "bank": "BCP",
+        "account": "",
+        "cci": "",
+        "holder": ""
+      },
+      "card": {
+        "on": true,
+        "surcharge": 0
+      },
+      "cod": {
+        "on": true
+      }
     }
   },
   "data": {

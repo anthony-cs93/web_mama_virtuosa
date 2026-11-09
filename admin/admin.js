@@ -49,7 +49,7 @@ function ask({ title, message = '', confirmText = 'Aceptar', cancelText = 'Cance
       e.preventDefault();
       if (input) {
         const v = $('#cfm-in').value.trim();
-        if (!v) { $('#cfm-err').textContent = 'Escribe un nombre.'; $('#cfm-in').focus(); return; }
+        if (!v && !input.optional) { $('#cfm-err').textContent = 'Escribe un nombre.'; $('#cfm-in').focus(); return; }
         cfm.close(); finish(v);
       } else { cfm.close(); finish(true); }
     });
@@ -88,6 +88,12 @@ const D = () => S.data;
 function markDirty() {
   dirty = true;
   $('#save').disabled = false; $('#dirty').hidden = false;
+  syncCatSave();
+}
+/* Botones «Guardar cambios» dentro de cada categoría: mismo guardado que el de arriba */
+function syncCatSave(busy) {
+  $$('[data-act=c-save]').forEach(b => { b.disabled = busy || !dirty; b.textContent = busy ? 'Guardando…' : 'Guardar cambios'; });
+  $$('.cat-foot-note').forEach(n => { n.textContent = busy ? '' : dirty ? 'Tienes cambios sin guardar.' : 'Todo guardado.'; });
 }
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -95,13 +101,8 @@ function normalize() {
   const d = D();
   d.featured = d.featured || [];
   d.heroes = d.heroes || [];
-  d.catFilter = d.catFilter || {};
-  d.catGoals = d.catGoals || {};
-  if (d.goals && d.goals.length) {   // datos antiguos: una lista global → pasa a las categorías que la usaban
-    d.catOrder.forEach(c => { if ((d.catFilter[c] || {}).goals && !d.catGoals[c]) d.catGoals[c] = [...d.goals]; });
-  }
-  delete d.goals;
-  Object.values(d.catFilter).forEach(f => { if (f) delete f.goals; });
+  d.catFilters = d.catFilters || {};
+  d.catOrder.forEach(c => { d.catFilters[c] = d.catFilters[c] || []; });
   d.hero = { ...clone(DEFAULT_HERO), ...(d.hero || {}) };
   flagged.clear(); d.featured.forEach(id => flagged.add(id));
   d.episodes.forEach(e => { if (e.date === undefined) e.date = (e.meta || '').split(' · ')[1] || ''; });
@@ -121,9 +122,13 @@ function payload() {
     if (p.imgs && p.imgs.length) p.img = p.imgs[0]; else { delete p.img; delete p.imgs; }
     if (!p.opt) delete p.opt;
   });
-  Object.keys(d.catFilter).forEach(k => { const f = d.catFilter[k]; if (!d.catOrder.includes(k) || !f || (!f.label && !(f.options && f.options.length))) delete d.catFilter[k]; });
-  Object.keys(d.catGoals).forEach(k => { if (!d.catOrder.includes(k) || !(d.catGoals[k] || []).length) delete d.catGoals[k]; });
-  d.products.forEach(p => { const list = d.catGoals[p.cat] || []; p.goals = (p.goals || []).filter(g => list.includes(g)); if (!p.goals.length) delete p.goals; });
+  Object.keys(d.catFilters).forEach(k => { if (!d.catOrder.includes(k)) delete d.catFilters[k]; else d.catFilters[k] = d.catFilters[k].filter(f => f.name.trim()); });
+  d.products.forEach(p => {
+    const nf = {};
+    (d.catFilters[p.cat] || []).forEach(f => { const v = ((p.f || {})[f.id] || []).filter(x => f.options.includes(x)); if (v.length) nf[f.id] = f.multi ? v : v.slice(0, 1); });
+    if (Object.keys(nf).length) p.f = nf; else delete p.f;
+    delete p.goals;
+  });
   d.heroes.forEach(h => { if (!h.cta1) delete h.cta1; if (!h.cta2) delete h.cta2; });
   if (!d.hero.cta1) delete d.hero.cta1;
   if (!d.hero.cta2) delete d.hero.cta2;
@@ -133,13 +138,13 @@ function payload() {
 }
 
 async function save() {
-  const btn = $('#save'); btn.disabled = true; btn.textContent = 'Guardando…';
+  const btn = $('#save'); btn.disabled = true; btn.textContent = 'Guardando…'; syncCatSave(true);
   try {
     await api('PUT', '/api/store', payload());
     dirty = false; $('#dirty').hidden = true;
     toast('Guardado. La tienda lo mostrará en menos de un minuto.');
   } catch (e) { btn.disabled = false; toast(e.message, true); }
-  btn.textContent = 'Guardar cambios';
+  btn.textContent = 'Guardar cambios'; syncCatSave();
 }
 
 /* ---------- sesión ---------- */
@@ -192,6 +197,7 @@ async function boot() {
   normalize();
   $('#login').hidden = true; $('#shell').hidden = false;
   render(); bootOff();
+  loadOrders().catch(() => {});
 }
 
 /* ---------- pestañas ---------- */
@@ -204,7 +210,7 @@ $('#tabs').addEventListener('click', e => {
 $('#save').addEventListener('click', save);
 function render() {
   if (!S) return;
-  ({ productos: renderProducts, categorias: renderCats, portada: renderHero, podcast: renderPodcast, ajustes: renderSettings })[tab]();
+  ({ productos: renderProducts, categorias: renderCats, portada: renderHero, podcast: renderPodcast, ajustes: renderSettings, pedidos: renderOrders })[tab]();
 }
 
 /* ---------- reordenar (arrastrar) ---------- */
@@ -312,6 +318,7 @@ const nextId = () => D().products.reduce((m, p) => Math.max(m, p.id), 0) + 1;
 
 view.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.closest('summary')) e.preventDefault();
   const row = b.closest('.row'), act = b.dataset.act;
   if (act.startsWith('p-')) {
     if (act === 'p-new') return productDialog(null);
@@ -344,19 +351,16 @@ view.addEventListener('click', e => {
     return;
   }
   if (act.startsWith('c-')) return catClick(b, act);
-  if (act.startsWith('g-')) return goalClick(b, act);
+  if (act.startsWith('fl-') || act.startsWith('fo-')) return filterClick(b, act);
   if (act.startsWith('e-')) return podClick(b, act);
   if (act.startsWith('s-')) return setClick(b, act);
   if (act.startsWith('h-')) return heroClick(b, act);
+  if (act.startsWith('o-')) return ordClick(b, act);
 });
 
-const goalsOf = cat => (D().catGoals || {})[cat] || [];
-/* Sugerencias de subcategoría: las opciones del filtro de la categoría + las que ya usan sus productos */
-function subOptions(cat) {
-  const set = new Set(((D().catFilter || {})[cat] || {}).options || []);
-  D().products.filter(p => p.cat === cat).forEach(p => p.sub && set.add(p.sub));
-  return [...set];
-}
+const newFid = () => 'f' + Math.random().toString(36).slice(2, 6);
+const filtersOfCat = c => (D().catFilters[c] = D().catFilters[c] || []);
+const pv = (p, f) => (p.f && p.f[f.id]) || [];
 
 function productDialog(p) {
   const isNew = !p, d = D();
@@ -371,8 +375,8 @@ function productDialog(p) {
       <label class="fld"><span>Nombre *</span><input type="text" name="name" value="${esc(draft.name)}" required maxlength="80"></label>
       <div class="grid2">
         <label class="fld"><span>Categoría *</span><small>La sección de la tienda donde aparece.</small><select name="cat">${d.catOrder.map(c => `<option${c === draft.cat ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-        <div class="fld" id="sub-fld"></div>
       </div>
+      <div class="fldset" id="filt-flds"></div>
       <div class="grid4">
         <label class="fld"><span>Precio (S/) *</span><input type="number" name="price" min="0" step="0.10" value="${draft.price}" required></label>
         <label class="fld"><span>Precio antes (S/)</span><input type="number" name="old" min="0" step="0.10" value="${draft.old || ''}" placeholder="Sin oferta"><small>Si lo llenas, se ve tachado</small></label>
@@ -385,7 +389,6 @@ function productDialog(p) {
         <input type="hidden" name="tone" value="${esc(draft.tone)}"></div>
       <div class="fld"><span>Edad del niño (opcional)</span>
         <div class="chips">${AGES.map(a => `<label><input type="checkbox" name="ages" value="${a}"${draft.ages.includes(a) ? ' checked' : ''}><span>${a} años</span></label>`).join('')}</div></div>
-      <div class="fld" id="goals-fld" hidden><span>Por beneficio <small>(puedes marcar varios · solo en categorías que tengan este filtro)</small></span><div class="chips" id="goals-chips"></div></div>
       <div class="grid2">
         <label class="fld"><span>Opción (ej. Talla, Color)</span><input type="text" name="optLabel" value="${esc(draft.opt ? draft.opt.label : '')}" maxlength="20"></label>
         <label class="fld"><span>Valores, separados por coma</span><input type="text" name="optValues" value="${esc(draft.opt ? draft.opt.values.join(', ') : '')}" placeholder="0–6m, 6–12m, 1–2a"></label>
@@ -399,35 +402,28 @@ function productDialog(p) {
     <div class="dlg-foot"><span></span><div class="r"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">${isNew ? 'Agregar producto' : 'Aplicar'}</button></div></div>
   </form>`;
   const f = $('#pf');
-  /* Campo de subcategoría: usa el nombre y las opciones que se configuraron en Categorías → Filtro de subcategorías */
-  let subVal = draft.sub || '';
-  const drawSub = () => {
-    const cat = f.cat.value, cf = (D().catFilter || {})[cat] || {}, opts = cf.options || [], label = cf.label || 'Subcategoría';
-    const box = $('#sub-fld');
-    if (opts.length) {
-      const extra = subVal && !opts.includes(subVal) ? [subVal] : [];
-      box.innerHTML = `<span>${esc(label)}</span><small>Una sola opción. Las opciones se configuran en Categorías → ${esc(cat)} → Filtro de subcategorías.</small>
-        <select name="sub"><option value="">Ninguna</option>${[...opts, ...extra].map(o => `<option value="${esc(o)}"${o === subVal ? ' selected' : ''}>${esc(o)}${extra.includes(o) ? ' (ya no está en las opciones)' : ''}</option>`).join('')}</select>`;
-      $('select', box).addEventListener('change', e => { subVal = e.target.value; });
-    } else {
-      box.innerHTML = `<span>${esc(label)}</span><small>Una sola. Para elegirla de una lista, escribe las opciones en Categorías → ${esc(cat)} → Filtro de subcategorías.</small>
-        <input type="text" name="sub" list="subs" value="${esc(subVal)}" maxlength="40"><datalist id="subs">${subOptions(cat).map(o => `<option>${esc(o)}</option>`).join('')}</datalist>`;
-      $('input', box).addEventListener('input', e => { subVal = e.target.value; });
-    }
+  /* Filtros de la categoría elegida: un campo por filtro (desplegable si es de una opción, casillas si admite varias) */
+  let sel = {};
+  Object.entries(draft.f || {}).forEach(([k, v]) => { sel[k] = [...v]; });
+  const drawFilters = () => {
+    const cat = f.cat.value, list = filtersOfCat(cat), box = $('#filt-flds');
+    if (!list.length) { box.innerHTML = `<p class="muted small" style="margin:0">Esta categoría aún no tiene filtros. Créalos en <b>Categorías → ${esc(cat)} → Filtros en la tienda</b>.</p>`; return; }
+    box.innerHTML = list.map(fl => {
+      const cur = sel[fl.id] || [], extra = cur.filter(x => !fl.options.includes(x));
+      const all = [...fl.options, ...extra];
+      if (fl.multi) return `<div class="fld" data-fid="${esc(fl.id)}"><span>${esc(fl.name)} <small>(puedes marcar varias)</small></span>
+        <div class="chips">${all.map(o => `<label><input type="checkbox" data-fo="${esc(o)}"${cur.includes(o) ? ' checked' : ''}><span>${esc(o)}${extra.includes(o) ? ' (ya no existe)' : ''}</span></label>`).join('') || '<small>Sin opciones todavía.</small>'}</div></div>`;
+      return `<label class="fld" data-fid="${esc(fl.id)}"><span>${esc(fl.name)} <small>(una sola opción)</small></span>
+        <select data-single><option value="">Ninguna</option>${all.map(o => `<option value="${esc(o)}"${cur[0] === o ? ' selected' : ''}>${esc(o)}${extra.includes(o) ? ' (ya no existe)' : ''}</option>`).join('')}</select></label>`;
+    }).join('');
   };
-  drawSub();
-  f.cat.addEventListener('change', () => {
-    if (subVal && !subOptions(f.cat.value).includes(subVal)) subVal = '';   // la subcategoría anterior no existe en la nueva categoría
-    drawSub();
+  drawFilters();
+  f.cat.addEventListener('change', () => { sel = {}; drawFilters(); });
+  $('#filt-flds').addEventListener('change', e => {
+    const fid = e.target.closest('[data-fid]').dataset.fid;
+    if (e.target.matches('select[data-single]')) sel[fid] = e.target.value ? [e.target.value] : [];
+    else { const set = new Set(sel[fid] || []); e.target.checked ? set.add(e.target.dataset.fo) : set.delete(e.target.dataset.fo); sel[fid] = [...set]; }
   });
-  const selGoals = new Set(draft.goals || []);
-  const drawGoals = () => {
-    const list = goalsOf(f.cat.value);
-    $('#goals-fld').hidden = !list.length;
-    $('#goals-chips').innerHTML = list.map(g => `<label><input type="checkbox" name="goals" value="${esc(g)}"${selGoals.has(g) ? ' checked' : ''}><span>${esc(g)}</span></label>`).join('');
-  };
-  drawGoals(); f.cat.addEventListener('change', drawGoals);
-  $('#goals-chips').addEventListener('change', e => { e.target.checked ? selGoals.add(e.target.value) : selGoals.delete(e.target.value); });
 
   const setTone = t => { f.tone.value = t; $$('#tone-sw button').forEach(b => b.setAttribute('aria-pressed', b.dataset.tone === t)); };
   $('#tone-sw').addEventListener('click', e => { const b = e.target.closest('[data-tone]'); if (b) setTone(b.dataset.tone); });
@@ -477,11 +473,16 @@ function productDialog(p) {
     if (optValues.length && !optLabel) return err('Ponle un nombre a la opción (ej. Talla).');
     const out = {
       ...(isNew ? {} : p),
-      id: isNew ? nextId() : p.id, name, cat: v.get('cat'), sub: v.get('sub').trim(),
+      id: isNew ? nextId() : p.id, name, cat: v.get('cat'),
       price: Math.round(price * 100) / 100, old: Math.round(old * 100) / 100, tag: v.get('tag').trim(), tone: v.get('tone'),
-      stock: Number.isNaN(stock) ? 0 : Math.max(0, stock), ages: v.getAll('ages'), goals: goalsOf(v.get('cat')).filter(g => selGoals.has(g)),
+      stock: Number.isNaN(stock) ? 0 : Math.max(0, stock), ages: v.getAll('ages'),
       desc: v.get('desc').trim(), care: v.get('care').trim(), imgs: draft.imgs
     };
+    const fl = filtersOfCat(out.cat), nf = {};
+    fl.forEach(x => { const vals = (sel[x.id] || []).filter(o => x.options.includes(o)); if (vals.length) nf[x.id] = x.multi ? vals : vals.slice(0, 1); });
+    if (Object.keys(nf).length) out.f = nf; else delete out.f;
+    delete out.goals;
+    out.sub = fl[0] ? ((nf[fl[0].id] || [])[0] || '') : '';
     if (optValues.length) out.opt = { label: optLabel, values: optValues }; else delete out.opt;
     if (isNew) D().products.unshift(out); else D().products[D().products.indexOf(p)] = out;
     v.get('star') ? flagged.add(out.id) : flagged.delete(out.id);
@@ -502,9 +503,12 @@ function renderCats() {
     <p class="muted">Aparecen en el menú, en el inicio y como filtro. El orden de aquí es el de la tienda. Abre una categoría para editar sus datos, sus filtros y su menú.</p></div>
     <button class="btn" data-act="c-new">+ Nueva categoría</button></div>
   ${d.catOrder.map((c, i) => {
-    const m = d.mega[c], n = d.products.filter(p => p.cat === c).length, cf = d.catFilter[c] || {}, gl = d.catGoals[c] || [];
+    const m = d.mega[c], n = d.products.filter(p => p.cat === c).length, fls = d.catFilters[c] || [];
     return `<details class="card" data-ci="${i}">
-    <summary><span class="sw" style="background:${esc(d.catTone[c])}"></span><b>${esc(c)}</b><span class="muted small">${n} producto${n === 1 ? '' : 's'}</span></summary>
+    <summary><span class="sw" style="background:${esc(d.catTone[c])}"></span><b>${esc(c)}</b><span class="muted small">${n} producto${n === 1 ? '' : 's'} · ${fls.length} filtro${fls.length === 1 ? '' : 's'}</span>
+      <span class="reorder">
+        <button type="button" class="icon-btn" data-act="c-up" aria-label="Subir categoría ${esc(c)}" title="Subir"${i === 0 ? ' disabled' : ''}>↑</button>
+        <button type="button" class="icon-btn" data-act="c-down" aria-label="Bajar categoría ${esc(c)}" title="Bajar"${i === d.catOrder.length - 1 ? ' disabled' : ''}>↓</button></span></summary>
     <div class="stack">
       <h3 class="sub-h">1 · Datos de la categoría</h3>
       <div class="grid3">
@@ -516,93 +520,141 @@ function renderCats() {
         <input type="color" data-cf="tone" value="${/^#[0-9a-f]{6}$/i.test(d.catTone[c]) ? d.catTone[c] : '#fdd9ea'}" aria-label="Otro color"></div></div>
 
       <h3 class="sub-h">2 · Filtros en la tienda</h3>
-      <div class="fbox"><b>Filtro de subcategorías</b>
-        <p class="muted small">Cada producto tiene <u>una sola</u> subcategoría (ej.: Brochas, Adultos, Niños). Aquí eliges cómo se llama este filtro y qué opciones muestra.</p>
-        <div class="grid2">
-          <label class="fld"><span>Nombre del filtro</span><input type="text" data-cf="fLabel" value="${esc(cf.label || '')}" placeholder="Subcategoría" maxlength="30"><small>Ej.: «Por edad».</small></label>
-          <label class="fld"><span>Opciones (separadas por coma)</span><input type="text" data-cf="fOpts" value="${esc((cf.options || []).join(', '))}" placeholder="Todas las subcategorías" maxlength="120"><small>Ej.: Adultos, Niños. Vacío = muestra todas las que existan.</small></label>
-        </div></div>
-      <div class="fbox"><b>Filtro «Por beneficio» <span class="muted small">· opcional</span></b>
-        <p class="muted small">Cada producto puede tener <u>varios</u> beneficios (ej.: Sueño, Digestión). Si no agregas ninguno, este filtro no aparece en <b>${esc(c)}</b>.</p>
-        <div class="rows">${gl.map((g, k) => { const cnt = d.products.filter(p => p.cat === c && (p.goals || []).includes(g)).length; return `
-          <div class="row" data-gi="${k}">
-            <input type="text" data-gf="name" value="${esc(g)}" maxlength="40" aria-label="Nombre del beneficio" style="flex:1;min-width:160px">
-            <span class="muted small" style="min-width:100px">${cnt} producto${cnt === 1 ? '' : 's'}</span>
-            <div class="acts">
-              <button type="button" class="icon-btn" data-act="g-up" aria-label="Subir"${k === 0 ? ' disabled' : ''}>↑</button>
-              <button type="button" class="icon-btn" data-act="g-down" aria-label="Bajar"${k === gl.length - 1 ? ' disabled' : ''}>↓</button>
-              <button type="button" class="icon-btn" data-act="g-del" aria-label="Eliminar">🗑</button></div></div>`; }).join('')}</div>
-        <div class="g-add-row"><input type="text" class="g-new" placeholder="Nuevo beneficio (ej. Sueño y relajación)" maxlength="40"><button type="button" class="btn sm" data-act="g-add">+ Agregar</button></div></div>
+      <p class="muted small" style="margin:-4px 0 0">Cada filtro tiene un <b>nombre</b> (ej.: «Por edad») y sus <b>opciones</b> (ej.: Adultos, Niños). Crea todos los que necesites: tus clientes los verán a la izquierda de los productos. Después asigna las opciones a cada producto al editarlo.</p>
+      ${fls.map((fl, k) => `
+      <div class="fbox" data-fid="${esc(fl.id)}">
+        <div class="fhead">
+          <label class="fld grow"><span>Nombre del filtro</span><input type="text" data-ff="name" value="${esc(fl.name)}" maxlength="30" placeholder="Ej.: Por edad"></label>
+          <label class="fld"><span>Cada producto puede tener</span><select data-ff="multi"><option value="0"${fl.multi ? '' : ' selected'}>Una sola opción</option><option value="1"${fl.multi ? ' selected' : ''}>Varias opciones</option></select></label>
+          <div class="acts">
+            <button type="button" class="icon-btn" data-act="fl-up" aria-label="Subir filtro"${k === 0 ? ' disabled' : ''}>↑</button>
+            <button type="button" class="icon-btn" data-act="fl-down" aria-label="Bajar filtro"${k === fls.length - 1 ? ' disabled' : ''}>↓</button>
+            <button type="button" class="icon-btn" data-act="fl-del" aria-label="Eliminar filtro" title="Eliminar filtro">🗑</button></div>
+        </div>
+        <div class="fld"><span>Opciones <em class="cntp">${fl.options.length === 1 ? '1 opción' : fl.options.length + ' opciones'}</em></span>
+          <div class="opt-list">${fl.options.map((o, oi) => { const cnt = d.products.filter(p => p.cat === c && pv(p, fl).includes(o)).length; return `
+            <div class="row" data-oi="${oi}">
+              <input type="text" data-fo="name" value="${esc(o)}" maxlength="40" aria-label="Opción">
+              <span class="muted small cnt-s">${cnt} producto${cnt === 1 ? '' : 's'}</span>
+              <div class="acts">
+                <button type="button" class="icon-btn" data-act="fo-up" aria-label="Subir"${oi === 0 ? ' disabled' : ''}>↑</button>
+                <button type="button" class="icon-btn" data-act="fo-down" aria-label="Bajar"${oi === fl.options.length - 1 ? ' disabled' : ''}>↓</button>
+                <button type="button" class="icon-btn" data-act="fo-del" aria-label="Eliminar opción">🗑</button></div></div>`; }).join('') || '<div class="muted small">Aún no hay opciones.</div>'}</div>
+          <div class="g-add-row"><input type="text" class="o-new" placeholder="Agregar opciones (varias separadas por coma)" maxlength="160"><button type="button" class="btn sm" data-act="fo-add">+ Agregar</button></div>
+        </div>
+      </div>`).join('')}
+      <div><button type="button" class="btn ghost sm" data-act="fl-add">+ Agregar filtro</button></div>
 
       <h3 class="sub-h">3 · Menú desplegable</h3>
       <div class="fld"><span>Columnas</span>
         <div class="cols-ed">${m.cols.map((col, k) => `<div class="col-box" data-k="${k}">
           <input type="text" data-cf="colT" value="${esc(col.t)}" placeholder="Título (ej. Cabello)" aria-label="Título de la columna">
           <input type="text" data-cf="colL" value="${esc(col.l.join(', '))}" placeholder="Brochas, Peines, Lazos" aria-label="Enlaces de la columna, separados por coma">
-          <label class="check small"><input type="checkbox" data-cf="colK"${col.kind === 'goal' ? ' checked' : ''}> Estos enlaces son beneficios</label>
+          <label class="fld small"><span>Cada enlace filtra por</span><select data-cf="colF"><option value="">La opción con ese nombre (automático)</option>${fls.map(fl => `<option value="${esc(fl.id)}"${col.fid === fl.id ? ' selected' : ''}>${esc(fl.name)}</option>`).join('')}</select></label>
           <button type="button" class="link red" data-act="c-colrm" data-k="${k}">Quitar columna</button></div>`).join('')}</div>
         ${m.cols.length < 4 ? '<div><button type="button" class="link" data-act="c-coladd">+ Agregar columna</button></div>' : ''}
-        <small>Cada enlace del menú lleva a los productos con esa subcategoría (o con ese beneficio, si marcas la casilla).</small></div>
+        <small>Cada enlace del menú lleva a los productos de la categoría con esa opción.</small></div>
       <div class="grid2">
         <label class="fld"><span>Producto destacado del menú</span><select data-cf="promoId"><option value="">Ninguno</option>
           ${d.products.map(p => `<option value="${p.id}"${m.promo && m.promo.id === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
         <label class="fld"><span>Texto del destacado</span><input type="text" data-cf="promoS" value="${esc(m.promo ? m.promo.s : '')}" placeholder="Nuevo · S/ 59.90" maxlength="50"></label>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button type="button" class="btn ghost sm" data-act="c-up"${i === 0 ? ' disabled' : ''}>↑ Subir</button>
-        <button type="button" class="btn ghost sm" data-act="c-down"${i === d.catOrder.length - 1 ? ' disabled' : ''}>↓ Bajar</button>
+      <div class="cat-foot">
+        <button type="button" class="btn" data-act="c-save"${dirty ? '' : ' disabled'}>Guardar cambios</button>
+        <span class="muted small cat-foot-note">${dirty ? 'Tienes cambios sin guardar.' : 'Todo guardado.'}</span>
         <button type="button" class="btn danger sm" data-act="c-del">Eliminar categoría</button></div>
     </div></details>`;
   }).join('')}`;
-  const open = renderCats.open; if (open != null) { const el = $(`details[data-ci="${open}"]`); if (el) el.open = true; }
+  if (renderCats.openSet) { renderCats.openSet.forEach(k => { const el = $(`details[data-ci="${k}"]`); if (el) el.open = true; }); renderCats.openSet = null; renderCats.open = null; }
+  else { const open = renderCats.open; if (open != null) { const el = $(`details[data-ci="${open}"]`); if (el) el.open = true; } }
 }
 
-/* Beneficios: cada categoría tiene su propia lista (d.catGoals[categoría]) */
-view.addEventListener('keydown', e => { if (e.target.classList && e.target.classList.contains('g-new') && e.key === 'Enter') { e.preventDefault(); goalClick(e.target, 'g-add'); } });
-function goalCtx(el) {
-  const d = D(), card = el.closest('details[data-ci]'), ci = +card.dataset.ci, c = d.catOrder[ci];
-  d.catGoals[c] = d.catGoals[c] || [];
-  return { d, card, ci, c, list: d.catGoals[c] };
+/* Filtros y opciones de cada categoría: d.catFilters[categoría] = [{ id, name, multi, options[] }] */
+view.addEventListener('keydown', e => { if (e.target.classList && e.target.classList.contains('o-new') && e.key === 'Enter') { e.preventDefault(); filterClick(e.target, 'fo-add'); } });
+function filterCtx(el) {
+  const d = D(), card = el.closest('details[data-ci]'), ci = +card.dataset.ci, c = d.catOrder[ci], list = filtersOfCat(c);
+  const box = el.closest('.fbox'), fl = box ? list.find(x => x.id === box.dataset.fid) : null;
+  return { d, card, ci, c, list, box, fl };
 }
-function goalClick(b, act) {
-  const { d, card, ci, c, list } = goalCtx(b);
+function filterClick(b, act) {
+  const { d, card, ci, c, list, box, fl } = filterCtx(b);
   renderCats.open = ci;
-  if (act === 'g-add') {
-    const inp = $('.g-new', card), n = inp.value.trim();
-    if (!n) { inp.focus(); return; }
-    if (list.some(g => g.toLowerCase() === n.toLowerCase())) { toast('Ese beneficio ya existe en esta categoría', true); return; }
-    list.push(n); markDirty(); renderCats(); $(`details[data-ci="${ci}"] .g-new`).focus(); return;
+  if (act === 'fl-add') {
+    const nf = { id: newFid(), name: 'Nuevo filtro', multi: false, options: [] };
+    list.push(nf); markDirty(); renderCats();
+    const inp = $(`details[data-ci="${ci}"] .fbox[data-fid="${nf.id}"] [data-ff=name]`); if (inp) { inp.focus(); inp.select(); }
+    return;
   }
-  const i = +b.closest('.row').dataset.gi, g = list[i];
-  if (act === 'g-up' && i > 0) { moveIn(list, i, i - 1); markDirty(); renderCats(); }
-  if (act === 'g-down' && i < list.length - 1) { moveIn(list, i, i + 1); markDirty(); renderCats(); }
-  if (act === 'g-del') {
-    const n = d.products.filter(p => p.cat === c && (p.goals || []).includes(g)).length;
-    ask({ title: '¿Eliminar beneficio?', message: `Se quitará <b>${esc(g)}</b> del filtro de ${esc(c)}${n ? ` y de ${n} producto${n === 1 ? '' : 's'}` : ''}.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
+  if (act.startsWith('fl-')) {
+    const i = list.indexOf(fl);
+    if (act === 'fl-up' && i > 0) { moveIn(list, i, i - 1); markDirty(); renderCats(); }
+    if (act === 'fl-down' && i < list.length - 1) { moveIn(list, i, i + 1); markDirty(); renderCats(); }
+    if (act === 'fl-del') {
+      const n = d.products.filter(p => p.cat === c && pv(p, fl).length).length;
+      ask({ title: '¿Eliminar filtro?', message: `Se eliminará el filtro <b>${esc(fl.name)}</b> de ${esc(c)}${n ? ` y las opciones asignadas a ${n} producto${n === 1 ? '' : 's'}` : ''}.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
+        if (!ok) return;
+        list.splice(list.indexOf(fl), 1);
+        d.products.forEach(p => { if (p.cat === c && p.f) delete p.f[fl.id]; });
+        d.mega[c].cols.forEach(col => { if (col.fid === fl.id) delete col.fid; });
+        markDirty(); renderCats();
+      });
+    }
+    return;
+  }
+  if (act === 'fo-add') {
+    const inp = $('.o-new', box), names = inp.value.split(',').map(x => x.trim()).filter(Boolean);
+    if (!names.length) { inp.focus(); return; }
+    const added = [];
+    names.forEach(nm => { if (!fl.options.some(o => o.toLowerCase() === nm.toLowerCase()) && !added.some(o => o.toLowerCase() === nm.toLowerCase())) added.push(nm); });
+    if (!added.length) { toast('Esas opciones ya existen en este filtro', true); return; }
+    fl.options.push(...added); markDirty(); renderCats();
+    const again = $(`details[data-ci="${ci}"] .fbox[data-fid="${fl.id}"] .o-new`); if (again) again.focus();
+    return;
+  }
+  const oi = +b.closest('.row').dataset.oi, o = fl.options[oi];
+  if (act === 'fo-up' && oi > 0) { moveIn(fl.options, oi, oi - 1); markDirty(); renderCats(); }
+  if (act === 'fo-down' && oi < fl.options.length - 1) { moveIn(fl.options, oi, oi + 1); markDirty(); renderCats(); }
+  if (act === 'fo-del') {
+    const n = d.products.filter(p => p.cat === c && pv(p, fl).includes(o)).length;
+    ask({ title: '¿Eliminar opción?', message: `Se quitará <b>${esc(o)}</b> del filtro <b>${esc(fl.name)}</b>${n ? ` y de ${n} producto${n === 1 ? '' : 's'}` : ''}.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
       if (!ok) return;
-      list.splice(list.indexOf(g), 1);
-      d.products.forEach(p => { if (p.cat === c && p.goals) p.goals = p.goals.filter(x => x !== g); });
-      d.mega[c].cols.forEach(col => { if (col.kind === 'goal') col.l = col.l.filter(x => x !== g); });
+      fl.options.splice(fl.options.indexOf(o), 1);
+      d.products.forEach(p => { if (p.cat === c && p.f && p.f[fl.id]) p.f[fl.id] = p.f[fl.id].filter(x => x !== o); });
+      d.mega[c].cols.forEach(col => { if (col.fid === fl.id) col.l = col.l.filter(x => x !== o); });
       markDirty(); renderCats();
     });
   }
 }
-function goalRename(t) {
-  const { d, ci, c, list } = goalCtx(t), i = +t.closest('.row').dataset.gi, old = list[i], n = t.value.trim();
-  if (!n) { t.value = old; return; }
-  if (n === old) return;
-  if (list.some((g, k) => k !== i && g.toLowerCase() === n.toLowerCase())) { toast('Ya existe un beneficio con ese nombre', true); t.value = old; return; }
-  list[i] = n;
-  d.products.forEach(p => { if (p.cat === c && p.goals) p.goals = p.goals.map(x => (x === old ? n : x)); });
-  d.mega[c].cols.forEach(col => { if (col.kind === 'goal') col.l = col.l.map(x => (x === old ? n : x)); });
-  renderCats.open = ci; markDirty(); renderCats();
+function filterEdit(t) {
+  const { d, ci, c, fl } = filterCtx(t);
+  if (t.dataset.ff === 'name') { fl.name = t.value; markDirty(); return; }
+  if (t.dataset.ff === 'multi') {
+    fl.multi = t.value === '1';
+    if (!fl.multi) {   // pasar a «una sola opción»: cada producto conserva únicamente la primera
+      let n = 0;
+      d.products.forEach(p => { if (p.cat === c && p.f && p.f[fl.id] && p.f[fl.id].length > 1) { p.f[fl.id] = p.f[fl.id].slice(0, 1); n++; } });
+      if (n) toast(`${n} producto${n === 1 ? '' : 's'} tenía varias opciones: se dejó solo la primera.`);
+    }
+    markDirty(); return;
+  }
+  if (t.dataset.fo === 'name') {   // renombrar una opción
+    const row = t.closest('.row'), oi = +row.dataset.oi, old = fl.options[oi], nv = t.value.trim();
+    if (!nv) { t.value = old; return; }
+    if (nv === old) return;
+    if (fl.options.some((x, k) => k !== oi && x.toLowerCase() === nv.toLowerCase())) { toast('Ya existe una opción con ese nombre', true); t.value = old; return; }
+    fl.options[oi] = nv;
+    d.products.forEach(p => { if (p.cat === c && p.f && p.f[fl.id]) p.f[fl.id] = p.f[fl.id].map(x => (x === old ? nv : x)); });
+    d.mega[c].cols.forEach(col => { if (col.fid === fl.id) col.l = col.l.map(x => (x === old ? nv : x)); });
+    renderCats.open = ci; markDirty(); renderCats();
+  }
 }
 function catClick(b, act) {
   const d = D();
+  if (act === 'c-save') { save(); return; }
   if (act === 'c-new') {
     let n = 'Nueva categoría', k = 2; while (d.catOrder.includes(n)) n = 'Nueva categoría ' + k++;
     d.catOrder.push(n); d.catSub[n] = ''; d.catTone[n] = TONES[d.catOrder.length % TONES.length]; d.catShort[n] = '';
-    d.mega[n] = { cols: [], promo: null };
+    d.mega[n] = { cols: [], promo: null }; d.catFilters[n] = [];
     renderCats.open = d.catOrder.length - 1; markDirty(); renderCats();
     const card = $(`details[data-ci="${d.catOrder.length - 1}"] [data-cf=name]`); card.select(); return;
   }
@@ -611,8 +663,13 @@ function catClick(b, act) {
   if (act === 'c-tone') { d.catTone[c] = b.dataset.t; }
   if (act === 'c-coladd') d.mega[c].cols.push({ t: '', l: [] });
   if (act === 'c-colrm') d.mega[c].cols.splice(+b.dataset.k, 1);
-  if (act === 'c-up' && i > 0) { moveIn(d.catOrder, i, i - 1); renderCats.open = i - 1; }
-  if (act === 'c-down' && i < d.catOrder.length - 1) { moveIn(d.catOrder, i, i + 1); renderCats.open = i + 1; }
+  if ((act === 'c-up' && i > 0) || (act === 'c-down' && i < d.catOrder.length - 1)) {
+    const j = act === 'c-up' ? i - 1 : i + 1;
+    const opened = new Set($$('details[data-ci][open]').map(x => +x.dataset.ci));   // cada categoría conserva si estaba abierta o cerrada
+    const a = opened.has(i), bb = opened.has(j);
+    opened.delete(i); opened.delete(j); if (a) opened.add(j); if (bb) opened.add(i);
+    moveIn(d.catOrder, i, j); renderCats.openSet = opened;
+  }
   if (act === 'c-del') {
     const n = d.products.filter(p => p.cat === c).length;
     if (n) {
@@ -621,7 +678,7 @@ function catClick(b, act) {
     }
     ask({ title: '¿Eliminar categoría?', message: `Se eliminará <b>${esc(c)}</b> del menú y del inicio.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
       if (!ok) return;
-      d.catOrder.splice(d.catOrder.indexOf(c), 1); [d.catSub, d.catTone, d.catShort, d.mega, d.catFilter, d.catGoals].forEach(o => delete o[c]); renderCats.open = null;
+      d.catOrder.splice(d.catOrder.indexOf(c), 1); [d.catSub, d.catTone, d.catShort, d.mega, d.catFilters].forEach(o => delete o[c]); renderCats.open = null;
       markDirty(); renderCats();
     });
     return;
@@ -630,6 +687,7 @@ function catClick(b, act) {
 }
 view.addEventListener('input', e => {
   const t = e.target, f = t.dataset.cf, card = t.closest('details[data-ci]');
+  if (t.dataset.ff === 'name' && t.closest('.fbox')) return filterEdit(t);
   if (!f || !card || f === 'name') return;
   const d = D(), c = d.catOrder[+card.dataset.ci];
   if (f === 'short') d.catShort[c] = t.value;
@@ -638,18 +696,14 @@ view.addEventListener('input', e => {
   if (f === 'colT') d.mega[c].cols[+t.closest('.col-box').dataset.k].t = t.value;
   if (f === 'colL') d.mega[c].cols[+t.closest('.col-box').dataset.k].l = t.value.split(',').map(s => s.trim()).filter(Boolean);
   if (f === 'promoS') { d.mega[c].promo = d.mega[c].promo || { s: '', id: null }; d.mega[c].promo.s = t.value; }
-  if (f === 'fLabel' || f === 'fOpts') {
-    const cur = d.catFilter[c] = d.catFilter[c] || { label: '', options: [] };
-    if (f === 'fLabel') cur.label = t.value.trim(); else cur.options = t.value.split(',').map(x => x.trim()).filter(Boolean);
-  }
   markDirty();
 });
 view.addEventListener('change', e => {
   const t = e.target, f = t.dataset.cf, card = t.closest('details[data-ci]');
-  if (t.dataset.gf === 'name') return goalRename(t);
+  if (t.dataset.ff === 'multi' || (t.dataset.fo === 'name' && t.closest('.fbox'))) return filterEdit(t);
   if (!card) return;
   const d = D(), i = +card.dataset.ci, c = d.catOrder[i];
-  if (f === 'colK') { const col = d.mega[c].cols[+t.closest('.col-box').dataset.k]; if (t.checked) col.kind = 'goal'; else delete col.kind; markDirty(); return; }
+  if (f === 'colF') { const col = d.mega[c].cols[+t.closest('.col-box').dataset.k]; if (t.value) col.fid = t.value; else delete col.fid; markDirty(); return; }
   if (f === 'promoId') {
     const id = +t.value; const m = d.mega[c];
     if (!id) m.promo = null; else {
@@ -664,7 +718,7 @@ view.addEventListener('change', e => {
     if (n === c) return;
     if (d.catOrder.includes(n)) { toast('Ya existe una categoría con ese nombre', true); t.value = c; return; }
     d.catOrder[i] = n;
-    [d.catSub, d.catTone, d.catShort, d.mega, d.catFilter, d.catGoals].forEach(o => { if (o[c] !== undefined) o[n] = o[c]; delete o[c]; });
+    [d.catSub, d.catTone, d.catShort, d.mega, d.catFilters].forEach(o => { if (o[c] !== undefined) o[n] = o[c]; delete o[c]; });
     d.products.forEach(p => { if (p.cat === c) p.cat = n; });
     if (filter.cat === c) filter.cat = n;
     markDirty(); renderCats.open = i; renderCats();
@@ -773,7 +827,7 @@ const SOCIALS = ['Instagram', 'TikTok', 'Facebook', 'Spotify', 'Apple', 'YouTube
 function renderSettings() {
   const c = S.config, d = D();
   view.innerHTML = `
-  <div class="sec-head"><div><h1>Ajustes</h1><p class="muted">Contacto, redes, envíos, cupones y textos de ayuda.</p></div></div>
+  <div class="sec-head"><div><h1>Ajustes</h1><p class="muted">Contacto, redes, envíos, medios de pago, cupones y textos de ayuda.</p></div></div>
   <div class="card"><h2>WhatsApp</h2><div class="grid2">
     <label class="fld"><span>Número (con código de país, sin + ni espacios)</span><input type="tel" data-bind="config.whatsapp" value="${esc(c.whatsapp)}" inputmode="numeric" placeholder="51940395933"></label>
     <label class="fld"><span>Mensaje inicial</span><input type="text" data-bind="config.whatsappMsg" value="${esc(c.whatsappMsg)}"></label></div></div>
@@ -786,35 +840,68 @@ function renderSettings() {
       <label class="fld"><span>Nombre</span><input type="text" data-bind="data.shipping.${k}.l" value="${esc(s.l)}"></label>
       <label class="fld"><span>Plazo</span><input type="text" data-bind="data.shipping.${k}.s" value="${esc(s.s)}"></label>
       <label class="fld"><span>Costo (S/)</span><input type="number" min="0" step="0.5" data-bind="data.shipping.${k}.p" data-num value="${s.p}"></label></div>`).join('')}</div></div>
-  <div class="card"><h2>Cupones</h2><div class="stack" id="coupons">${Object.entries(c.coupons).map(([code, pct]) => couponRow(code, pct)).join('')}</div>
+  <div class="card"><h2>Medios de pago</h2>
+    <p class="muted small" style="margin:-6px 0 14px">Se muestran al cliente en la página de su pedido. Si dejas Yape o la transferencia sin datos, se le ofrece pedirlos por WhatsApp.</p>
+    <div class="stack">
+      <div class="pay-set"><label class="chk-on"><input type="checkbox" data-bind="config.pay.yape.on" data-bool${c.pay.yape.on ? ' checked' : ''}> <b>Yape / Plin</b></label>
+        <div class="grid2"><label class="fld"><span>Número</span><input type="tel" data-bind="config.pay.yape.number" value="${esc(c.pay.yape.number)}" inputmode="numeric" placeholder="9XX XXX XXX"></label>
+        <label class="fld"><span>Titular</span><input type="text" data-bind="config.pay.yape.holder" value="${esc(c.pay.yape.holder)}"></label></div>
+        <div class="qr-set"><label class="fld" style="flex:1"><span>Imagen del QR (opcional)</span><input type="url" data-bind="config.pay.yape.qr" value="${esc(c.pay.yape.qr)}" placeholder="https://…"></label>
+          <button type="button" class="btn ghost sm" data-act="s-qr">Subir QR</button><input type="file" id="qr-file" accept="image/*" hidden>
+          ${c.pay.yape.qr ? `<img class="qr-prev" src="${esc(c.pay.yape.qr)}" alt="Vista previa del QR">` : ''}</div></div>
+      <div class="pay-set"><label class="chk-on"><input type="checkbox" data-bind="config.pay.bank.on" data-bool${c.pay.bank.on ? ' checked' : ''}> <b>Transferencia bancaria</b></label>
+        <div class="grid2"><label class="fld"><span>Banco</span><input type="text" data-bind="config.pay.bank.bank" value="${esc(c.pay.bank.bank)}"></label>
+        <label class="fld"><span>Titular</span><input type="text" data-bind="config.pay.bank.holder" value="${esc(c.pay.bank.holder)}"></label>
+        <label class="fld"><span>Número de cuenta</span><input type="text" data-bind="config.pay.bank.account" value="${esc(c.pay.bank.account)}"></label>
+        <label class="fld"><span>CCI</span><input type="text" data-bind="config.pay.bank.cci" value="${esc(c.pay.bank.cci)}"></label></div></div>
+      <div class="pay-set"><label class="chk-on"><input type="checkbox" data-bind="config.pay.card.on" data-bool${c.pay.card.on ? ' checked' : ''}> <b>Tarjeta (link de pago por WhatsApp)</b></label>
+        <label class="fld" style="max-width:300px"><span>Recargo por pagar con tarjeta (%)</span><input type="number" min="0" max="15" step="0.1" data-bind="config.pay.card.surcharge" data-num value="${c.pay.card.surcharge}"></label>
+        <p class="muted small" style="margin:0">El cliente confirma su pedido y tú le envías el link de pago (Izipay, Mercado Pago, etc.) por WhatsApp. Con 0 no se cobra recargo.</p></div>
+      <div class="pay-set"><label class="chk-on"><input type="checkbox" data-bind="config.pay.cod.on" data-bool${c.pay.cod.on ? ' checked' : ''}> <b>Pago contra entrega</b> <small>(solo delivery en Lima)</small></label></div>
+    </div></div>
+  <div class="card"><h2>Cupones</h2>
+    <p class="muted small" style="margin:-6px 0 14px">Los cupones no se publican en la tienda: se validan en el servidor. El descuento se aplica solo a los productos, no al envío.</p>
+    <div class="stack" id="coupons">${Object.entries(c.coupons).map(([code, cp]) => couponRow(code, cp)).join('')}</div>
     <div style="margin-top:12px"><button type="button" class="link" data-act="s-coupon">+ Agregar cupón</button></div></div>
   <div class="card"><h2>Páginas de ayuda</h2><div class="stack">${Object.entries(d.help).map(([k, h]) => `
     <div class="stack"><label class="fld"><span>Título</span><input type="text" data-bind="data.help.${k}.title" value="${esc(h.title)}"></label>
     <label class="fld"><span>Texto <small>(separa los párrafos con una línea en blanco)</small></span><textarea rows="5" data-bind="data.help.${k}.body" data-paras>${esc(h.body.join('\n\n'))}</textarea></label></div>`).join('')}</div></div>
   <div class="card"><h2>Seguridad</h2><p class="muted" style="margin-top:0">Cada guardado deja un respaldo en Vercel Blob (carpeta <code>backups/</code>, se conservan los últimos 30). La contraseña se cambia en Vercel → Settings → Environment Variables → <code>ADMIN_PASSWORD</code> (y se vuelve a desplegar).</p></div>`;
 }
-const couponRow = (code, pct) => `<div class="grid3" data-coupon><label class="fld"><span>Código</span><input type="text" data-cp="code" value="${esc(code)}" maxlength="24" style="text-transform:uppercase"></label>
-  <label class="fld"><span>Descuento (%)</span><input type="number" min="1" max="90" step="1" data-cp="pct" value="${Math.round(pct * 100)}"></label>
-  <div style="align-self:end"><button type="button" class="link red" data-act="s-cprm">Quitar</button></div></div>`;
+const couponRow = (code, c) => `<div class="coupon-row" data-coupon>
+  <label class="fld"><span>Código</span><input type="text" data-cp="code" value="${esc(code)}" maxlength="24" style="text-transform:uppercase"></label>
+  <label class="fld"><span>Tipo</span><select data-cp="type"><option value="pct"${c.type === 'pct' ? ' selected' : ''}>Porcentaje (%)</option><option value="amt"${c.type === 'amt' ? ' selected' : ''}>Monto fijo (S/)</option></select></label>
+  <label class="fld"><span>Valor</span><input type="number" min="1" step="1" data-cp="value" value="${c.value}"></label>
+  <label class="fld"><span>Compra mínima (S/)</span><input type="number" min="0" step="1" data-cp="min" value="${c.min || 0}"></label>
+  <label class="fld"><span>Vence <small>(vacío = no vence)</small></span><input type="date" data-cp="expires" value="${esc(c.expires || '')}"></label>
+  <label class="chk-on"><input type="checkbox" data-cp="active"${c.active !== false ? ' checked' : ''}> Activo</label>
+  <button type="button" class="link red" data-act="s-cprm">Quitar</button></div>`;
 function setClick(b, act) {
-  if (act === 's-coupon') { $('#coupons').insertAdjacentHTML('beforeend', couponRow('', 0.1)); $('#coupons [data-coupon]:last-child input').focus(); }
+  if (act === 's-coupon') { $('#coupons').insertAdjacentHTML('beforeend', couponRow('', { type: 'pct', value: 10, min: 0, expires: '', active: true })); $('#coupons [data-coupon]:last-child input').focus(); }
   if (act === 's-cprm') { b.closest('[data-coupon]').remove(); readCoupons(); }
+  if (act === 's-qr') $('#qr-file').click();
 }
 function readCoupons() {
   const out = {};
   $$('#coupons [data-coupon]').forEach(r => {
-    const code = $('[data-cp=code]', r).value.trim().toUpperCase().replace(/\s+/g, ''), pct = parseFloat($('[data-cp=pct]', r).value);
-    if (code && pct > 0 && pct <= 90) out[code] = Math.round(pct) / 100;
+    const g = k => $(`[data-cp=${k}]`, r), code = g('code').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ''), type = g('type').value, value = parseFloat(g('value').value);
+    if (code && value > 0 && (type === 'amt' || value <= 90)) out[code] = { type, value: type === 'pct' ? Math.round(value) : Math.round(value * 100) / 100, min: Math.max(0, parseFloat(g('min').value) || 0), expires: g('expires').value || '', active: g('active').checked };
   });
   S.config.coupons = out; markDirty();
 }
+view.addEventListener('change', async e => {
+  if (e.target.id !== 'qr-file' || !e.target.files[0]) return;
+  try { S.config.pay.yape.qr = await upload('image', await prepImage(e.target.files[0])); markDirty(); renderSettings(); toast('QR subido. Recuerda guardar los cambios.'); }
+  catch (err) { toast(err.message, true); }
+});
 view.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.cp) return readCoupons();
   const path = t.dataset.bind; if (!path) return;
   const keys = path.split('.'), last = keys.pop();
   const obj = keys.reduce((o, k) => o[k], S);
-  if (t.hasAttribute('data-paras')) obj[last] = t.value.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  if (t.hasAttribute('data-bool')) obj[last] = t.checked;
+  else if (t.hasAttribute('data-paras')) obj[last] = t.value.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
   else if (t.hasAttribute('data-num')) obj[last] = parseFloat(t.value) || 0;
   else obj[last] = t.type === 'tel' ? t.value.replace(/\D/g, '') : t.value;
   markDirty();
@@ -1028,6 +1115,114 @@ async function heroVariants(file) {
     return new File([blob], base + suffix + '.jpg', { type: 'image/jpeg' });
   };
   return { big: await make(1600, ''), small: bmp.width > 900 ? await make(800, '-m') : null, w: bmp.width };
+}
+
+/* =====================================================================
+   PEDIDOS (se guardan al instante, no usan «Guardar cambios»)
+   ===================================================================== */
+const O_STATUS = { pending: 'Esperando pago', review: 'Comprobante por revisar', paid: 'Pagado', preparing: 'En preparación', ready: 'Listo / en camino', delivered: 'Entregado', cancelled: 'Cancelado' };
+const O_PAY = { yape: 'Yape / Plin', bank: 'Transferencia', card: 'Tarjeta (link)', cod: 'Contra entrega' };
+const O_FILTERS = [
+  ['open', 'Por atender', o => ['pending', 'review', 'paid', 'preparing', 'ready'].includes(o.status)],
+  ['review', 'Por confirmar pago', o => o.status === 'review'],
+  ['paid', 'Pagados', o => ['paid', 'preparing', 'ready'].includes(o.status)],
+  ['delivered', 'Entregados', o => o.status === 'delivered'],
+  ['cancelled', 'Cancelados', o => o.status === 'cancelled'],
+  ['all', 'Todos', () => true]
+];
+let ORD = null, ordF = 'open';
+const odlg = $('#ord');
+const when = iso => new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function ordBadge() {
+  const b = $('[data-tab=pedidos]'); if (!b || !ORD) return;
+  const old = $('.pill', b); if (old) old.remove();
+  const n = ORD.filter(o => o.status === 'review').length;
+  if (n) b.insertAdjacentHTML('beforeend', `<span class="pill red" title="Pagos por confirmar">${n}</span>`);
+}
+async function loadOrders() {
+  ORD = (await api('GET', '/api/orders-admin')).orders;
+  ordBadge();
+}
+async function renderOrders() {
+  view.innerHTML = `<div class="sec-head"><div><h1>Pedidos</h1><p class="muted">Los cambios de estado se guardan al instante. El stock no se descuenta solo: ajústalo en Productos.</p></div>
+    <button class="btn ghost sm" data-act="o-refresh">↻ Actualizar</button></div><div id="o-box"><p class="muted">Cargando pedidos…</p></div>`;
+  try { await loadOrders(); } catch (e) { $('#o-box').innerHTML = `<p class="form-err">${esc(e.message)}</p>`; return; }
+  drawOrders();
+}
+function drawOrders() {
+  const box = $('#o-box'); if (!box || tab !== 'pedidos' || !ORD) return;
+  const counts = Object.fromEntries(O_FILTERS.map(([k, , fn]) => [k, ORD.filter(fn).length]));
+  const list = ORD.filter(O_FILTERS.find(f => f[0] === ordF)[2]);
+  box.innerHTML = `<div class="chips" role="radiogroup" aria-label="Filtrar pedidos">${O_FILTERS.map(([k, l]) => `<label><input type="radio" name="of" value="${k}" data-of${k === ordF ? ' checked' : ''}><span>${l} (${counts[k]})</span></label>`).join('')}</div>
+    <div class="rows" style="margin-top:14px">${list.length ? list.map(o => `<button type="button" class="row o-row" data-act="o-open" data-code="${esc(o.code)}">
+      <b class="o-code">${esc(o.code)}</b>
+      <span class="o-who">${esc(o.customer.name)}<small>${esc(when(o.createdAt))} · ${esc(O_PAY[o.pay.method])}</small></span>
+      <b class="o-tot">${fmt(o.totals.total)}</b><span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></button>`).join('') : '<p class="muted">No hay pedidos en esta vista.</p>'}</div>`;
+}
+view.addEventListener('change', e => { if (e.target.dataset.of !== undefined) { ordF = e.target.value; drawOrders(); } });
+
+function openOrder(code) {
+  const o = ORD && ORD.find(x => x.code === code); if (!o) return;
+  const t = o.totals, c = o.customer, d = o.delivery, a = d.address;
+  const first = c.name.split(' ')[0];
+  const canPay = ['pending', 'review'].includes(o.status) && o.pay.method !== 'cod';
+  const line = (k, v) => v ? `<div class="o-kv"><span>${k}</span><b>${esc(v)}</b></div>` : '';
+  odlg.innerHTML = `<div class="dlg-head"><h2 id="ord-t">${esc(o.code)} <span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+  <div class="dlg-body" data-code="${esc(o.code)}">
+    <section class="o-sec"><h3>Cliente</h3>${line('Nombre', c.name)}${line('Celular', c.phone)}${line('Correo', c.email)}
+      ${o.doc ? line(o.doc.type === 'boleta' ? 'Boleta · DNI' : 'Factura · RUC', o.doc.type === 'boleta' ? o.doc.dni : `${o.doc.ruc} · ${o.doc.razon}`) : ''}${line('Nota del cliente', o.notes)}</section>
+    <section class="o-sec"><h3>Entrega</h3>${line('Modalidad', d.label + (d.eta ? ' · ' + d.eta : ''))}
+      ${d.ship === 'pick' ? '' : line('Dirección', [a.dir, a.ref && '(' + a.ref + ')', a.distrito, a.prov !== a.distrito ? a.prov : '', a.depto !== a.prov ? a.depto : ''].filter(Boolean).join(', '))}</section>
+    <section class="o-sec"><h3>Productos</h3>${o.items.map(i => `<div class="o-kv"><span>${esc(i.name)}${i.opt ? ' · ' + esc(i.opt) : ''} × ${i.qty}</span><b>${fmt(i.price * i.qty)}</b></div>`).join('')}
+      <div class="o-sum">${t.disc ? `<div class="o-kv"><span>Cupón ${esc(t.coupon)}</span><b>− ${fmt(t.disc)}</b></div>` : ''}
+      <div class="o-kv"><span>Envío</span><b>${t.ship ? fmt(t.ship) : 'Gratis'}</b></div>${t.surcharge ? `<div class="o-kv"><span>Recargo tarjeta (${t.surchargePct}%)</span><b>${fmt(t.surcharge)}</b></div>` : ''}
+      <div class="o-kv o-total"><span>Total · ${esc(O_PAY[o.pay.method])}</span><b>${fmt(t.total)}</b></div></div></section>
+    ${o.proof ? `<section class="o-sec"><h3>Comprobante <small>${esc(when(o.proof.at))}</small></h3><a href="${esc(o.proof.url)}" target="_blank" rel="noopener"><img class="proof-img" src="${esc(o.proof.url)}" alt="Comprobante de pago de ${esc(o.code)}"></a></section>` : ''}
+    <section class="o-sec"><h3>Cambiar estado</h3><div class="o-state">
+      <select id="o-status" aria-label="Estado del pedido">${Object.entries(O_STATUS).map(([k, l]) => `<option value="${k}"${k === o.status ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <button type="button" class="btn sm" data-act="o-save" id="o-save" disabled>Guardar estado</button>
+      ${canPay ? '<button type="button" class="btn sm ghost" data-act="o-paid">✓ Confirmar pago</button>' : ''}</div></section>
+    <section class="o-sec"><h3>Historial</h3><ol class="o-hist">${[...o.history].reverse().map(h => `<li><b>${O_STATUS[h.status]}</b> <small>${esc(when(h.at))}</small>${h.note ? `<br><span class="muted">${esc(h.note)}</span>` : ''}</li>`).join('')}</ol></section>
+  </div>
+  <div class="dlg-foot"><div class="r">${o.status !== 'cancelled' ? '<button type="button" class="link red" data-act="o-cancel">Cancelar pedido</button>' : ''}</div>
+    <div class="r"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/51${esc(c.phone)}?text=${encodeURIComponent(`Hola ${first}, te escribimos de Mamá Virtuosa por tu pedido ${o.code}.`)}">💬 WhatsApp al cliente</a>
+      <a class="btn ghost sm" target="_blank" rel="noopener" href="/#/pedido/${esc(o.code)}/${esc(o.token)}">Ver página del cliente ↗</a></div></div>`;
+  odlg.setAttribute('aria-labelledby', 'ord-t');
+  if (!odlg.open) odlg.showModal();
+}
+async function setOrderStatus(code, status, note, btn) {
+  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+  try {
+    const r = await api('POST', '/api/orders-admin', { code, status, note });
+    const i = ORD.findIndex(x => x.code === code); ORD[i] = r.order;
+    ordBadge(); drawOrders(); openOrder(code);
+    toast('Estado: ' + O_STATUS[status]);
+  } catch (e) { toast(e.message, true); if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); } }
+}
+odlg.addEventListener('click', async e => {
+  if (e.target.closest('[data-close]')) return odlg.close();
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const code = $('.dlg-body', odlg).dataset.code, o = ORD.find(x => x.code === code);
+  if (b.dataset.act === 'o-save') return setOrderStatus(code, $('#o-status').value, '', b);
+  if (b.dataset.act === 'o-paid') {
+    if (await ask({ title: '¿Confirmar el pago?', message: `Pedido <b>${esc(o.code)}</b> de ${esc(o.customer.name)} por <b>${fmt(o.totals.total)}</b>. Revisa que el dinero ya haya llegado.`, confirmText: 'Sí, confirmar pago', icon: 'info' })) setOrderStatus(code, 'paid', 'Pago confirmado desde el panel', b);
+    return;
+  }
+  if (b.dataset.act === 'o-cancel') {
+    const paid = ['paid', 'preparing', 'ready', 'delivered'].includes(o.status);
+    const reason = await ask({ title: '¿Cancelar el pedido?', message: `Pedido <b>${esc(o.code)}</b> de ${esc(o.customer.name)} por <b>${fmt(o.totals.total)}</b>.${paid ? '<br><b>Ya estaba pagado:</b> recuerda devolver su dinero.' : ''}`, confirmText: 'Cancelar pedido', cancelText: 'Volver', danger: true, icon: 'warn', input: { label: 'Motivo (opcional, lo verá el cliente)', value: '', max: 120, optional: true } });
+    if (reason !== null) setOrderStatus(code, 'cancelled', reason, b);
+  }
+});
+odlg.addEventListener('change', e => {
+  if (e.target.id !== 'o-status') return;
+  const o = ORD.find(x => x.code === $('.dlg-body', odlg).dataset.code);
+  $('#o-save').disabled = e.target.value === o.status;
+});
+function ordClick(b, act) {
+  if (act === 'o-open') return openOrder(b.dataset.code);
+  if (act === 'o-refresh') { b.disabled = true; renderOrders(); }
 }
 
 /* ---------- arranque ---------- */

@@ -1,4 +1,4 @@
-import { readStore, writeStore, requireAdmin, validate } from './_lib.js';
+import { readStore, writeStore, requireAdmin, validate, migrateConfig, LOCAL } from './_lib.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -9,7 +9,8 @@ export default async function handler(req, res) {
     }
     if (req.method === 'PUT') {
       if (!requireAdmin(req, res, { write: true })) return;
-      if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(500).json({ error: 'Falta conectar Vercel Blob al proyecto' });
+      if (!process.env.BLOB_READ_WRITE_TOKEN && !LOCAL) return res.status(500).json({ error: 'Falta conectar Vercel Blob al proyecto' });
+      migrateConfig(req.body);
       const err = validate(req.body);
       if (err) return res.status(400).json({ error: err });
       await writeStore(req.body);
