@@ -200,12 +200,12 @@ ${heroHTML()}
 </section>
 ${gomitas.length ? `<section class="section s48 gom-band" aria-labelledby="h-gom">
   <div class="sec-head"><h2 class="sec-title" id="h-gom">Gomitas Saludables</h2><a class="link" href="${catHref('Gomitas saludables')}">Ver todo →</a></div>
-  <a class="gom-banner" href="${catHref('Gomitas saludables')}"><img src="img/banner_gomitas.webp" width="1734" height="907" alt="Una familia disfruta de las gomitas saludables" loading="lazy"></a>
+  <a class="gom-banner" href="${catHref('Gomitas saludables')}"><img src="img/banner_gomitas.jpg" width="2000" height="667" alt="Una familia disfruta de las gomitas saludables" loading="lazy"></a>
   <div class="prod-grid">${gomitas.map(p => card(p)).join('')}</div>
 </section>` : ''}
 ${D.catOrder.includes('Ropa infantil') ? `<section class="section s48 gom-band" aria-labelledby="h-rop">
   <div class="sec-head"><h2 class="sec-title" id="h-rop">Ropita infantil</h2><a class="link" href="${catHref('Ropa infantil')}">Ver todo →</a></div>
-  <a class="gom-banner" href="${catHref('Ropa infantil')}"><img src="img/banner_hurray.jpg" width="1726" height="911" alt="Bebé sonriendo con un saco de dormir Hurray" loading="lazy"></a>
+  <a class="gom-banner" href="${catHref('Ropa infantil')}"><img src="img/banner_hurray.jpg" width="2000" height="667" alt="Bebé sonriendo con un saco de dormir Hurray" loading="lazy"></a>
   ${ropita.length ? `<div class="prod-grid">${ropita.map(p => card(p)).join('')}</div>` : ''}
 </section>` : ''}
 <section class="section s48" aria-labelledby="h-best">
