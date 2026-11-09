@@ -38,6 +38,13 @@ let cart = store.get('mv_cart', []).filter(validLine).map(l => ({ id: l.id, opt:
 let coupon = store.get('mv_coupon', null);   // { code, type, value, min }: lo valida el servidor al aplicarlo y otra vez al confirmar
 if (!coupon || typeof coupon !== 'object') coupon = null;
 const saveCart = () => { store.set('mv_cart', cart); store.set('mv_coupon', coupon); updateCartCount(); };
+let nudgeTimer;
+function nudgeCart() {
+  const b = $('.cart-btn'); if (!b) return;
+  clearTimeout(nudgeTimer); b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge');
+  nudgeTimer = setTimeout(() => b.classList.remove('nudge'), 6000);
+}
+$('.cart-btn').addEventListener('click', () => { clearTimeout(nudgeTimer); $('.cart-btn').classList.remove('nudge'); });
 function updateCartCount() { $('#cart-count').textContent = cart.reduce((a, l) => a + l.qty, 0); }
 /* devuelve true si se llegó al máximo disponible */
 function addToCart(id, opt, qty) {
@@ -871,6 +878,7 @@ const actions = {
   'pdp-img'(el) { ui.pdp.img = +el.dataset.i; syncPDP(); },
   'pdp-add'() {
     const capped = addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty);
+    nudgeCart();
     toast(capped ? 'Agregado. Es el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '#/carrito', label: 'Ver carrito' });
   },
   'pdp-buy'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); location.hash = '#/checkout'; },
