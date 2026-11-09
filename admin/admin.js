@@ -11,6 +11,38 @@ const view = $('#view'), dlg = $('#dlg');
 const TONES = ['#fdd9ea', '#e8d5e6', '#fbbad9', '#dcd5fb', '#fcf3c0', '#f8dcc6', '#d9fcd5', '#c8fcf4'];
 const AGES = ['0–1', '1–3', '3–6'];
 
+
+/* ---------- iconos (trazo, 24×24) ---------- */
+const IC = {
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  up: '<polyline points="18 15 12 9 6 15"/>',
+  down: '<polyline points="6 9 12 15 18 9"/>',
+  left: '<polyline points="15 18 9 12 15 6"/>',
+  right: '<polyline points="9 18 15 12 9 6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
+  grip: '<circle cx="9" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.5" fill="currentColor" stroke="none"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  play: '<polygon points="7 4 20 12 7 20 7 4"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  ext: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  mic: '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>',
+  box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  bag: '<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>'
+};
+const ic = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
+/* Subir y bajar en un solo control: una flecha arriba y otra abajo */
+const udBtns = (up, down, disUp, disDown) => `<span class="ud" role="group" aria-label="Cambiar orden"><button type="button" class="ud-b" data-act="${up}" aria-label="Subir" title="Subir"${disUp ? ' disabled' : ''}>${ic('up')}</button><button type="button" class="ud-b" data-act="${down}" aria-label="Bajar" title="Bajar"${disDown ? ' disabled' : ''}>${ic('down')}</button></span>`;
+const MAX_FEATURED = 8;
+
 let toastTimer;
 function toast(msg, bad) {
   const t = $('#toast');
@@ -101,6 +133,7 @@ function normalize() {
   const d = D();
   d.featured = d.featured || [];
   d.heroes = d.heroes || [];
+  d.districts = d.districts || [];
   d.catFilters = d.catFilters || {};
   d.catOrder.forEach(c => { d.catFilters[c] = d.catFilters[c] || []; });
   d.hero = { ...clone(DEFAULT_HERO), ...(d.hero || {}) };
@@ -111,7 +144,8 @@ function normalize() {
 
 function payload() {
   const out = clone(S), d = out.data;
-  d.featured = d.products.filter(p => flagged.has(p.id)).map(p => p.id);
+  d.featured = d.products.filter(p => flagged.has(p.id) && p.active !== false).map(p => p.id).slice(0, MAX_FEATURED);
+  d.products.forEach(p => { delete p.stock; });
   d.episodes.forEach(e => {
     const mins = Math.max(1, Math.round((e.secs || 0) / 60));
     e.meta = mins + ' min' + (e.date ? ' · ' + e.date : '');
@@ -189,6 +223,10 @@ $('#logout').addEventListener('click', async () => {
   location.reload();
 });
 
+const TAB_ICONS = { productos: 'box', categorias: 'layers', portada: 'image', podcast: 'mic', ajustes: 'sliders', pedidos: 'bag' };
+function decorateTabs() {
+  $$('#tabs [data-tab]').forEach(b => { if (!b.querySelector('.ic') && TAB_ICONS[b.dataset.tab]) b.insertAdjacentHTML('afterbegin', ic(TAB_ICONS[b.dataset.tab])); });
+}
 async function boot() {
   bootOn();
   const st = await (await fetch('/api/session', { credentials: 'same-origin' })).json();
@@ -196,6 +234,7 @@ async function boot() {
   S = await api('GET', '/api/store');
   normalize();
   $('#login').hidden = true; $('#shell').hidden = false;
+  decorateTabs();
   render(); bootOff();
   loadOrders().catch(() => {});
 }
@@ -210,7 +249,7 @@ $('#tabs').addEventListener('click', e => {
 $('#save').addEventListener('click', save);
 function render() {
   if (!S) return;
-  ({ productos: renderProducts, categorias: renderCats, portada: renderHero, podcast: renderPodcast, ajustes: renderSettings, pedidos: renderOrders })[tab]();
+  ({ productos: renderProducts, categorias: renderCats, portada: renderHero, podcast: renderPodcast, ajustes: renderSettings, pedidos: renderOrders, envios: renderShipping })[tab]();
 }
 
 /* ---------- reordenar (arrastrar) ---------- */
@@ -277,7 +316,7 @@ function renderProducts() {
   const reorderable = true;
   view.innerHTML = `
   <div class="sec-head"><div><h1>Productos</h1>
-    <p class="muted">${d.products.length} en total · ${flagged.size} destacados en el inicio (se muestran hasta 8). Arrastra ⋮⋮ o usa las flechas para cambiar el orden en que se muestran.</p></div>
+    <p class="muted">${d.products.length} en total · ${flagged.size} de ${MAX_FEATURED} destacados en «Más vendidos». Arrastra el icono de puntos o usa las flechas para cambiar el orden en que se muestran.</p></div>
     <button class="btn" data-act="p-new">+ Nuevo producto</button></div>
   <div class="toolbar">
     <input type="search" id="p-q" placeholder="Buscar producto…" aria-label="Buscar producto" value="${esc(filter.q)}">
@@ -285,20 +324,19 @@ function renderProducts() {
       ${d.catOrder.map(c => `<option${filter.cat === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
   </div>
   <div class="rows" id="p-rows">${vis.length ? vis.map((p, i) => `
-    <div class="row" data-i="${i}" data-id="${p.id}">
-      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">⋮⋮</button>
+    <div class="row${p.active === false ? ' is-off' : ''}" data-i="${i}" data-id="${p.id}">
+      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">${ic('grip')}</button>
       <div class="thumb" style="background:${esc(p.tone)}">${(p.imgs && p.imgs[0]) ? `<img src="${esc(src(p.imgs[0]))}" alt="" loading="lazy">` : 'sin foto'}</div>
-      <div class="main"><div class="nm">${esc(p.name)}${p.tag ? `<span class="pill">${esc(p.tag)}</span>` : ''}</div>
+      <div class="main"><div class="nm">${esc(p.name)}${p.tag ? `<span class="pill">${esc(p.tag)}</span>` : ''}${p.active === false ? '<span class="pill off">Oculto</span>' : ''}</div>
         <div class="sub">${esc(p.cat)} · ${esc(p.sub || 'sin subcategoría')}</div></div>
       <div class="num">${fmt(p.price)}${p.old ? `<s>${fmt(p.old)}</s>` : ''}</div>
-      <div class="stock ${p.stock <= 5 ? 'low' : ''}">${p.stock > 0 ? p.stock + ' en stock' : 'Agotado'}</div>
       <div class="acts">
-        <button class="icon-btn ${flagged.has(p.id) ? 'on' : ''}" data-act="p-star" title="Destacar en el inicio" aria-label="Destacar en el inicio" aria-pressed="${flagged.has(p.id)}">★</button>
-        <button class="icon-btn" data-act="p-up" aria-label="Subir" title="Subir"${i === 0 ? ' disabled' : ''}>↑</button>
-        <button class="icon-btn" data-act="p-down" aria-label="Bajar" title="Bajar"${i === vis.length - 1 ? ' disabled' : ''}>↓</button>
-        <button class="icon-btn" data-act="p-edit" aria-label="Editar ${esc(p.name)}" title="Editar">✎</button>
-        <button class="icon-btn" data-act="p-dup" aria-label="Duplicar" title="Duplicar">⧉</button>
-        <button class="icon-btn" data-act="p-del" aria-label="Eliminar" title="Eliminar">🗑</button>
+        <button class="icon-btn star ${flagged.has(p.id) ? 'on' : ''}" data-act="p-star" title="Destacar en «Más vendidos»" aria-label="Destacar en «Más vendidos»" aria-pressed="${flagged.has(p.id)}">${ic('star')}</button>
+        <button class="icon-btn vis ${p.active === false ? 'off' : ''}" data-act="p-vis" title="${p.active === false ? 'Mostrar en la tienda' : 'Ocultar de la tienda'}" aria-label="${p.active === false ? 'Mostrar en la tienda' : 'Ocultar de la tienda'}" aria-pressed="${p.active === false}">${ic(p.active === false ? 'eyeoff' : 'eye')}</button>
+        ${udBtns('p-up', 'p-down', i === 0, i === vis.length - 1)}
+        <button class="icon-btn" data-act="p-edit" aria-label="Editar ${esc(p.name)}" title="Editar">${ic('edit')}</button>
+        <button class="icon-btn" data-act="p-dup" aria-label="Duplicar" title="Duplicar">${ic('copy')}</button>
+        <button class="icon-btn" data-act="p-del" aria-label="Eliminar" title="Eliminar">${ic('trash')}</button>
       </div>
     </div>`).join('') : '<div class="empty">No hay productos que coincidan.</div>'}</div>`;
   $('#p-q').addEventListener('input', e => { filter.q = e.target.value; const pos = e.target.selectionStart; renderProducts(); const n = $('#p-q'); n.focus(); n.setSelectionRange(pos, pos); });
@@ -324,7 +362,17 @@ view.addEventListener('click', e => {
     if (act === 'p-new') return productDialog(null);
     const p = pById(+row.dataset.id), i = +row.dataset.i;
     if (act === 'p-edit') productDialog(p);
-    if (act === 'p-star') { flagged.has(p.id) ? flagged.delete(p.id) : flagged.add(p.id); markDirty(); renderProducts(); }
+    if (act === 'p-star') {
+      if (flagged.has(p.id)) flagged.delete(p.id);
+      else if (p.active === false) { toast('Un producto oculto no puede destacarse. Muéstralo primero.', true); return; }
+      else if (flagged.size >= MAX_FEATURED) { toast(`Solo puedes destacar ${MAX_FEATURED} productos. Quita uno para destacar otro.`, true); return; }
+      else flagged.add(p.id);
+      markDirty(); renderProducts();
+    }
+    if (act === 'p-vis') {
+      if (p.active === false) delete p.active; else { p.active = false; if (flagged.delete(p.id)) toast('Producto oculto. También se quitó de «Más vendidos».'); }
+      markDirty(); renderProducts();
+    }
     if (act === 'p-up') moveVisible(i, i - 1);
     if (act === 'p-down') moveVisible(i, i + 1);
     if (act === 'p-dup') {
@@ -356,6 +404,7 @@ view.addEventListener('click', e => {
   if (act.startsWith('s-')) return setClick(b, act);
   if (act.startsWith('h-')) return heroClick(b, act);
   if (act.startsWith('o-')) return ordClick(b, act);
+  if (act.startsWith('sh-')) return shipClick(b, act);
 });
 
 const newFid = () => 'f' + Math.random().toString(36).slice(2, 6);
@@ -365,22 +414,22 @@ const pv = (p, f) => (p.f && p.f[f.id]) || [];
 function productDialog(p) {
   const isNew = !p, d = D();
   const draft = isNew
-    ? { name: '', cat: filter.cat || d.catOrder[0], sub: '', price: 0, old: 0, tag: '', tone: TONES[0], stock: 10, ages: [], desc: '', care: '', imgs: [] }
+    ? { name: '', cat: filter.cat || d.catOrder[0], sub: '', price: 0, old: 0, tag: '', tone: TONES[0], ages: [], desc: '', care: '', imgs: [] }
     : clone(p);
   draft.imgs = draft.imgs || (draft.img ? [draft.img] : []);
   let star = !isNew && flagged.has(p.id);
   dlg.innerHTML = `<form method="dialog" id="pf" novalidate>
-    <div class="dlg-head"><h2 id="dlg-title">${isNew ? 'Nuevo producto' : 'Editar producto'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+    <div class="dlg-head"><h2 id="dlg-title">${isNew ? 'Nuevo producto' : 'Editar producto'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
     <div class="dlg-body">
       <label class="fld"><span>Nombre *</span><input type="text" name="name" value="${esc(draft.name)}" required maxlength="80"></label>
+      <div class="fld"><span>Fotos <small>(la primera es la principal; se reducen a 1400 px automáticamente)</small></span><div class="gallery" id="gal"></div></div>
       <div class="grid2">
         <label class="fld"><span>Categoría *</span><small>La sección de la tienda donde aparece.</small><select name="cat">${d.catOrder.map(c => `<option${c === draft.cat ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
       </div>
       <div class="fldset" id="filt-flds"></div>
-      <div class="grid4">
+      <div class="grid3">
         <label class="fld"><span>Precio (S/) *</span><input type="number" name="price" min="0" step="0.10" value="${draft.price}" required></label>
         <label class="fld"><span>Precio antes (S/)</span><input type="number" name="old" min="0" step="0.10" value="${draft.old || ''}" placeholder="Sin oferta"><small>Si lo llenas, se ve tachado</small></label>
-        <label class="fld"><span>Stock</span><input type="number" name="stock" min="0" step="1" value="${draft.stock}"></label>
         <label class="fld"><span>Etiqueta</span><input type="text" name="tag" list="tags" value="${esc(draft.tag)}" maxlength="14"><datalist id="tags"><option>Nuevo</option><option>Top</option><option>-20%</option><option>Oferta</option></datalist><small>«Top» sube en «Más vendidos»</small></label>
       </div>
       <div class="fld"><span>Color de fondo (si no hay foto)</span>
@@ -395,8 +444,8 @@ function productDialog(p) {
       </div>
       <label class="fld"><span>Descripción</span><textarea name="desc" rows="3">${esc(draft.desc)}</textarea></label>
       <label class="fld"><span>Medidas y cuidados</span><textarea name="care" rows="2">${esc(draft.care)}</textarea></label>
-      <div class="fld"><span>Fotos <small>(la primera es la principal; se reducen a 1400 px automáticamente)</small></span><div class="gallery" id="gal"></div></div>
-      <label class="check"><input type="checkbox" name="star"${star ? ' checked' : ''}> Mostrar en «Más vendidos» del inicio</label>
+      <label class="check"><input type="checkbox" name="active"${draft.active === false ? '' : ' checked'}> Visible en la tienda <small class="muted">· si lo desmarcas, se oculta (también en búsquedas, ofertas y destacados)</small></label>
+      <label class="check"><input type="checkbox" name="star"${star ? ' checked' : ''}> Mostrar en «Más vendidos» del inicio <small class="muted">· máximo ${MAX_FEATURED}</small></label>
       <div class="form-err" id="pf-err" role="alert"></div>
     </div>
     <div class="dlg-foot"><span></span><div class="r"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">${isNew ? 'Agregar producto' : 'Aplicar'}</button></div></div>
@@ -433,9 +482,9 @@ function productDialog(p) {
   function drawGallery() {
     gal.innerHTML = draft.imgs.map((u, i) => `<div class="g-item${i === 0 ? ' main' : ''}" data-i="${i}">
       ${i === 0 ? '<span class="tagm">Principal</span>' : ''}<img src="${esc(src(u))}" alt="Foto ${i + 1}">
-      <div class="bar"><button type="button" data-g="left" aria-label="Mover a la izquierda"${i === 0 ? ' disabled' : ''}>◀</button>
-        <button type="button" data-g="del" aria-label="Quitar foto">🗑</button>
-        <button type="button" data-g="right" aria-label="Mover a la derecha"${i === draft.imgs.length - 1 ? ' disabled' : ''}>▶</button></div></div>`).join('') +
+      <div class="bar"><button type="button" data-g="left" aria-label="Mover a la izquierda"${i === 0 ? ' disabled' : ''}>${ic('left')}</button>
+        <button type="button" data-g="del" aria-label="Quitar foto">${ic('trash')}</button>
+        <button type="button" data-g="right" aria-label="Mover a la derecha"${i === draft.imgs.length - 1 ? ' disabled' : ''}>${ic('right')}</button></div></div>`).join('') +
       `<label class="drop" id="drop" tabindex="0">+ Subir fotos<input type="file" accept="image/*" multiple hidden></label>`;
   }
   drawGallery();
@@ -465,7 +514,7 @@ function productDialog(p) {
   f.addEventListener('submit', e => {
     e.preventDefault();
     const v = new FormData(f), err = m => { $('#pf-err').textContent = m; };
-    const name = String(v.get('name')).trim(), price = parseFloat(v.get('price')), old = parseFloat(v.get('old')) || 0, stock = parseInt(v.get('stock'), 10);
+    const name = String(v.get('name')).trim(), price = parseFloat(v.get('price')), old = parseFloat(v.get('old')) || 0;
     if (!name) return err('Escribe el nombre del producto.');
     if (!(price >= 0) || Number.isNaN(price)) return err('Escribe un precio válido.');
     if (old && old <= price) return err('El «precio antes» debe ser mayor que el precio actual (o déjalo vacío).');
@@ -475,7 +524,7 @@ function productDialog(p) {
       ...(isNew ? {} : p),
       id: isNew ? nextId() : p.id, name, cat: v.get('cat'),
       price: Math.round(price * 100) / 100, old: Math.round(old * 100) / 100, tag: v.get('tag').trim(), tone: v.get('tone'),
-      stock: Number.isNaN(stock) ? 0 : Math.max(0, stock), ages: v.getAll('ages'),
+      ages: v.getAll('ages'),
       desc: v.get('desc').trim(), care: v.get('care').trim(), imgs: draft.imgs
     };
     const fl = filtersOfCat(out.cat), nf = {};
@@ -485,7 +534,11 @@ function productDialog(p) {
     out.sub = fl[0] ? ((nf[fl[0].id] || [])[0] || '') : '';
     if (optValues.length) out.opt = { label: optLabel, values: optValues }; else delete out.opt;
     if (isNew) D().products.unshift(out); else D().products[D().products.indexOf(p)] = out;
-    v.get('star') ? flagged.add(out.id) : flagged.delete(out.id);
+    delete out.stock;
+    if (v.get('active')) delete out.active; else out.active = false;
+    const wantStar = !!v.get('star') && out.active !== false;
+    if (wantStar && !flagged.has(out.id) && flagged.size >= MAX_FEATURED) return err(`Ya hay ${MAX_FEATURED} productos destacados en «Más vendidos». Quita uno para destacar este.`);
+    wantStar ? flagged.add(out.id) : flagged.delete(out.id);
     markDirty(); dlg.close(); renderProducts();
     toast(isNew ? 'Producto agregado. Recuerda guardar los cambios.' : 'Cambios aplicados. Recuerda guardar.');
   });
@@ -507,8 +560,7 @@ function renderCats() {
     return `<details class="card" data-ci="${i}">
     <summary><span class="sw" style="background:${esc(d.catTone[c])}"></span><b>${esc(c)}</b><span class="muted small">${n} producto${n === 1 ? '' : 's'} · ${fls.length} filtro${fls.length === 1 ? '' : 's'}</span>
       <span class="reorder">
-        <button type="button" class="icon-btn" data-act="c-up" aria-label="Subir categoría ${esc(c)}" title="Subir"${i === 0 ? ' disabled' : ''}>↑</button>
-        <button type="button" class="icon-btn" data-act="c-down" aria-label="Bajar categoría ${esc(c)}" title="Bajar"${i === d.catOrder.length - 1 ? ' disabled' : ''}>↓</button></span></summary>
+        ${udBtns('c-up', 'c-down', i === 0, i === d.catOrder.length - 1)}</span></summary>
     <div class="stack">
       <h3 class="sub-h">1 · Datos de la categoría</h3>
       <div class="grid3">
@@ -527,9 +579,8 @@ function renderCats() {
           <label class="fld grow"><span>Nombre del filtro</span><input type="text" data-ff="name" value="${esc(fl.name)}" maxlength="30" placeholder="Ej.: Por edad"></label>
           <label class="fld"><span>Cada producto puede tener</span><select data-ff="multi"><option value="0"${fl.multi ? '' : ' selected'}>Una sola opción</option><option value="1"${fl.multi ? ' selected' : ''}>Varias opciones</option></select></label>
           <div class="acts">
-            <button type="button" class="icon-btn" data-act="fl-up" aria-label="Subir filtro"${k === 0 ? ' disabled' : ''}>↑</button>
-            <button type="button" class="icon-btn" data-act="fl-down" aria-label="Bajar filtro"${k === fls.length - 1 ? ' disabled' : ''}>↓</button>
-            <button type="button" class="icon-btn" data-act="fl-del" aria-label="Eliminar filtro" title="Eliminar filtro">🗑</button></div>
+            ${udBtns('fl-up', 'fl-down', k === 0, k === fls.length - 1)}
+            <button type="button" class="icon-btn" data-act="fl-del" aria-label="Eliminar filtro" title="Eliminar filtro">${ic('trash')}</button></div>
         </div>
         <div class="fld"><span>Opciones <em class="cntp">${fl.options.length === 1 ? '1 opción' : fl.options.length + ' opciones'}</em></span>
           <div class="opt-list">${fl.options.map((o, oi) => { const cnt = d.products.filter(p => p.cat === c && pv(p, fl).includes(o)).length; return `
@@ -537,9 +588,8 @@ function renderCats() {
               <input type="text" data-fo="name" value="${esc(o)}" maxlength="40" aria-label="Opción">
               <span class="muted small cnt-s">${cnt} producto${cnt === 1 ? '' : 's'}</span>
               <div class="acts">
-                <button type="button" class="icon-btn" data-act="fo-up" aria-label="Subir"${oi === 0 ? ' disabled' : ''}>↑</button>
-                <button type="button" class="icon-btn" data-act="fo-down" aria-label="Bajar"${oi === fl.options.length - 1 ? ' disabled' : ''}>↓</button>
-                <button type="button" class="icon-btn" data-act="fo-del" aria-label="Eliminar opción">🗑</button></div></div>`; }).join('') || '<div class="muted small">Aún no hay opciones.</div>'}</div>
+                ${udBtns('fo-up', 'fo-down', oi === 0, oi === fl.options.length - 1)}
+                <button type="button" class="icon-btn" data-act="fo-del" aria-label="Eliminar opción">${ic('trash')}</button></div></div>`; }).join('') || '<div class="muted small">Aún no hay opciones.</div>'}</div>
           <div class="g-add-row"><input type="text" class="o-new" placeholder="Agregar opciones (varias separadas por coma)" maxlength="160"><button type="button" class="btn sm" data-act="fo-add">+ Agregar</button></div>
         </div>
       </div>`).join('')}
@@ -738,21 +788,20 @@ function renderPodcast() {
   const d = D();
   view.innerHTML = `
   <div class="sec-head"><div><h1>Podcast</h1>
-    <p class="muted">El primer episodio de la lista es el «Último episodio». Arrastra ⋮⋮ o usa las flechas para reordenar.</p></div>
+    <p class="muted">El primer episodio de la lista es el «Último episodio». Arrastra el icono de puntos o usa las flechas para reordenar.</p></div>
     <button class="btn" data-act="e-new">+ Nuevo episodio</button></div>
   <div class="card"><label class="fld"><span>Temas (filtros de la página del podcast)</span>
     <input type="text" id="topics" value="${esc(d.topics.filter(t => t !== 'Todos').join(', '))}" placeholder="Crianza, Lactancia, Salud, Belleza"><small>Separados por coma. «Todos» se agrega solo.</small></label></div>
   <div class="rows" id="e-rows">${d.episodes.length ? d.episodes.map((e, i) => `
     <div class="row" data-i="${i}">
-      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">⋮⋮</button>
-      <div class="thumb" style="background:#c8fcc8">🎙</div>
+      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">${ic('grip')}</button>
+      <div class="thumb" style="background:#c8fcc8">${ic('mic')}</div>
       <div class="main"><div class="nm">${esc(e.t)}</div>
         <div class="sub">${esc(e.date || 'sin fecha')} · ${mmss(e.secs || 0)} · ${esc(e.topic || 'sin tema')}${e.audio ? ' · con audio' : ' · sin audio'}</div></div>
       <div class="acts">
-        <button class="icon-btn" data-act="e-up" aria-label="Subir"${i === 0 ? ' disabled' : ''}>↑</button>
-        <button class="icon-btn" data-act="e-down" aria-label="Bajar"${i === d.episodes.length - 1 ? ' disabled' : ''}>↓</button>
-        <button class="icon-btn" data-act="e-edit" aria-label="Editar ${esc(e.t)}">✎</button>
-        <button class="icon-btn" data-act="e-del" aria-label="Eliminar">🗑</button></div>
+        ${udBtns('e-up', 'e-down', i === 0, i === d.episodes.length - 1)}
+        <button class="icon-btn" data-act="e-edit" aria-label="Editar ${esc(e.t)}">${ic('edit')}</button>
+        <button class="icon-btn" data-act="e-del" aria-label="Eliminar">${ic('trash')}</button></div>
     </div>`).join('') : '<div class="empty">Aún no hay episodios.</div>'}</div>`;
   $('#topics').addEventListener('input', e => {
     const list = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -773,7 +822,7 @@ function episodeDialog(e) {
   const isNew = !e, d = D();
   const draft = isNew ? { t: '', date: '', secs: 0, topic: (d.topics[1] || ''), prod: null, audio: '' } : clone(e);
   dlg.innerHTML = `<form method="dialog" id="ef" novalidate>
-    <div class="dlg-head"><h2 id="dlg-title">${isNew ? 'Nuevo episodio' : 'Editar episodio'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+    <div class="dlg-head"><h2 id="dlg-title">${isNew ? 'Nuevo episodio' : 'Editar episodio'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
     <div class="dlg-body">
       <label class="fld"><span>Título *</span><input type="text" name="t" value="${esc(draft.t)}" placeholder="Ep. 25 · Título del episodio" maxlength="90" required></label>
       <div class="grid3">
@@ -827,19 +876,13 @@ const SOCIALS = ['Instagram', 'TikTok', 'Facebook', 'Spotify', 'Apple', 'YouTube
 function renderSettings() {
   const c = S.config, d = D();
   view.innerHTML = `
-  <div class="sec-head"><div><h1>Ajustes</h1><p class="muted">Contacto, redes, envíos, medios de pago, cupones y textos de ayuda.</p></div></div>
+  <div class="sec-head"><div><h1>Ajustes</h1><p class="muted">Contacto, redes, medios de pago, cupones y textos de ayuda.</p></div></div>
   <div class="card"><h2>WhatsApp</h2><div class="grid2">
     <label class="fld"><span>Número (con código de país, sin + ni espacios)</span><input type="tel" data-bind="config.whatsapp" value="${esc(c.whatsapp)}" inputmode="numeric" placeholder="51940395933"></label>
     <label class="fld"><span>Mensaje inicial</span><input type="text" data-bind="config.whatsappMsg" value="${esc(c.whatsappMsg)}"></label></div></div>
   <div class="card"><h2>Redes y plataformas de podcast</h2><div class="grid2">
     ${SOCIALS.map(s => `<label class="fld"><span>${s}</span><input type="url" data-bind="config.social.${s}" value="${esc(c.social[s] || '')}" placeholder="https://…"></label>`).join('')}</div>
     <p class="muted small" style="margin:10px 0 0">Si dejas uno vacío, el botón mostrará «próximamente».</p></div>
-  <div class="card"><h2>Envíos</h2>
-    <label class="fld" style="max-width:300px;margin-bottom:14px"><span>Envío gratis en Lima desde (S/)</span><input type="number" min="0" step="1" data-bind="config.freeShippingFrom" data-num value="${c.freeShippingFrom}"></label>
-    <div class="stack">${Object.entries(d.shipping).map(([k, s]) => `<div class="grid3">
-      <label class="fld"><span>Nombre</span><input type="text" data-bind="data.shipping.${k}.l" value="${esc(s.l)}"></label>
-      <label class="fld"><span>Plazo</span><input type="text" data-bind="data.shipping.${k}.s" value="${esc(s.s)}"></label>
-      <label class="fld"><span>Costo (S/)</span><input type="number" min="0" step="0.5" data-bind="data.shipping.${k}.p" data-num value="${s.p}"></label></div>`).join('')}</div></div>
   <div class="card"><h2>Medios de pago</h2>
     <p class="muted small" style="margin:-6px 0 14px">Se muestran al cliente en la página de su pedido. Si dejas Yape o la transferencia sin datos, se le ofrece pedirlos por WhatsApp.</p>
     <div class="stack">
@@ -959,20 +1002,19 @@ function renderHero() {
   <div class="card"><h2>Ahora en la tienda</h2>${heroPreview(shown)}
     <p class="muted small" style="margin:10px 0 0">${live ? `Campaña «${esc(live.name)}»` : 'Portada por defecto (no hay campañas en vivo hoy)'}</p></div>
   <h2 class="h2">Campañas</h2>
-  <p class="muted small" style="margin:-6px 0 12px">Si coinciden varias en fechas, se muestra la que esté más arriba. Arrastra ⋮⋮ o usa las flechas para cambiar la prioridad.</p>
+  <p class="muted small" style="margin:-6px 0 12px">Si coinciden varias en fechas, se muestra la que esté más arriba. Arrastra el icono de puntos o usa las flechas para cambiar la prioridad.</p>
   <div class="rows" id="h-rows">${d.heroes.length ? d.heroes.map((h, i) => { const [st, k] = heroStatus(h); return `
     <div class="row" data-i="${i}">
-      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">⋮⋮</button>
+      <button class="grip" aria-hidden="true" tabindex="-1" title="Arrastrar">${ic('grip')}</button>
       <div class="thumb wide">${h.img ? `<img src="${esc(src(h.img))}" alt="" loading="lazy">` : 'sin imagen'}</div>
       <div class="main"><div class="nm">${esc(h.name)}<span class="st ${k}">${st}</span></div>
         <div class="sub">${esc(h.title)} · ${esc(heroRange(h))}</div></div>
       <div class="acts">
-        <button class="icon-btn ${h.active === false ? '' : 'on'}" data-act="h-toggle" aria-pressed="${h.active !== false}" title="${h.active === false ? 'Activar' : 'Pausar'}" aria-label="${h.active === false ? 'Activar' : 'Pausar'}">${h.active === false ? '▶' : '❚❚'}</button>
-        <button class="icon-btn" data-act="h-up" aria-label="Subir"${i === 0 ? ' disabled' : ''}>↑</button>
-        <button class="icon-btn" data-act="h-down" aria-label="Bajar"${i === d.heroes.length - 1 ? ' disabled' : ''}>↓</button>
-        <button class="icon-btn" data-act="h-edit" aria-label="Editar ${esc(h.name)}" title="Editar">✎</button>
-        <button class="icon-btn" data-act="h-dup" aria-label="Duplicar" title="Duplicar">⧉</button>
-        <button class="icon-btn" data-act="h-del" aria-label="Eliminar" title="Eliminar">🗑</button></div></div>`; }).join('') : '<div class="empty">Aún no hay campañas. Crea una desde una plantilla (Navidad, Día de la Madre, Cyber…).</div>'}</div>
+        <button class="icon-btn ${h.active === false ? '' : 'on'}" data-act="h-toggle" aria-pressed="${h.active !== false}" title="${h.active === false ? 'Activar' : 'Pausar'}" aria-label="${h.active === false ? 'Activar' : 'Pausar'}">${ic(h.active === false ? 'play' : 'pause')}</button>
+        ${udBtns('h-up', 'h-down', i === 0, i === d.heroes.length - 1)}
+        <button class="icon-btn" data-act="h-edit" aria-label="Editar ${esc(h.name)}" title="Editar">${ic('edit')}</button>
+        <button class="icon-btn" data-act="h-dup" aria-label="Duplicar" title="Duplicar">${ic('copy')}</button>
+        <button class="icon-btn" data-act="h-del" aria-label="Eliminar" title="Eliminar">${ic('trash')}</button></div></div>`; }).join('') : '<div class="empty">Aún no hay campañas. Crea una desde una plantilla (Navidad, Día de la Madre, Cyber…).</div>'}</div>
   <h2 class="h2" style="margin-top:28px">Portada por defecto</h2>
   <div class="card">${heroPreview(d.hero)}<div style="margin-top:12px"><button class="btn ghost sm" data-act="h-default">Editar portada por defecto</button></div>
     <p class="muted small" style="margin:10px 0 0">Se muestra cuando no hay ninguna campaña en vivo.</p></div>`;
@@ -1008,7 +1050,7 @@ function heroDialog(target) {
   const draft = isNew ? { name: '', active: true, start: '', end: '', eyebrow: '', title: '', text: '', cta1: { label: 'Ver ofertas', link: '#/ofertas' }, cta2: null, img: '', imgM: '', alt: '', pos: '60% 30%', bg: '' }
     : clone(isDef ? d.hero : target);
   dlg.innerHTML = `<form method="dialog" id="hf" novalidate>
-    <div class="dlg-head"><h2 id="dlg-title">${isDef ? 'Portada por defecto' : isNew ? 'Nueva campaña' : 'Editar campaña'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+    <div class="dlg-head"><h2 id="dlg-title">${isDef ? 'Portada por defecto' : isNew ? 'Nueva campaña' : 'Editar campaña'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
     <div class="dlg-body">
       <div id="hp-box"></div>
       ${isNew ? `<label class="fld"><span>Empezar desde una plantilla</span><select name="preset"><option value="">En blanco</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join('')}</select><small>Llena el texto, el color y las fechas sugeridas; puedes cambiarlos.</small></label>` : ''}
@@ -1117,6 +1159,92 @@ async function heroVariants(file) {
 }
 
 /* =====================================================================
+   ENVÍOS (zonas y costo por distrito de Lima y Callao)
+   ===================================================================== */
+const distRow = (d, i) => `<div class="d-row${!d.ship ? ' off' : d.cost === null ? ' bad' : ''}" data-i="${i}">
+  <span class="d-name">${esc(d.name)}<small>${esc(d.zone)}</small></span>
+  <select data-d="ship" aria-label="¿Se envía a ${esc(d.name)}?"><option value="1"${d.ship ? ' selected' : ''}>Sí</option><option value="0"${!d.ship ? ' selected' : ''}>No</option></select>
+  <input type="number" min="0" step="0.5" data-d="cost" value="${d.cost ?? ''}" placeholder="S/" aria-label="Costo de envío a ${esc(d.name)}">
+  <input type="text" data-d="note" value="${esc(d.note)}" maxlength="100" placeholder="Observación (opcional)" aria-label="Observación para ${esc(d.name)}"></div>`;
+function distCount() {
+  const ds = D().districts, ok = ds.filter(d => d.ship && d.cost !== null).length;
+  return `${ok} con envío · ${ds.length - ok} sin envío o pendientes`;
+}
+function renderShipping() {
+  const c = S.config, d = D();
+  view.innerHTML = `
+  <div class="sec-head"><div><h1>Envíos</h1><p class="muted">Zonas de entrega y costo de delivery por distrito. Aplica con «Guardar cambios».</p></div></div>
+  <div class="card"><h2>Zonas de entrega</h2>
+    <label class="fld" style="max-width:300px;margin-bottom:14px"><span>Envío gratis en Lima desde (S/)</span><input type="number" min="0" step="1" data-bind="config.freeShippingFrom" data-num value="${c.freeShippingFrom}"></label>
+    <div class="stack">${Object.entries(d.shipping).map(([k, s]) => `<div class="grid3">
+      <label class="fld"><span>Nombre</span><input type="text" data-bind="data.shipping.${k}.l" value="${esc(s.l)}"></label>
+      <label class="fld"><span>Plazo</span><input type="text" data-bind="data.shipping.${k}.s" value="${esc(s.s)}"></label>
+      ${k === 'prov' ? `<label class="fld"><span>Costo (S/)</span><input type="number" min="0" step="0.5" data-bind="data.shipping.${k}.p" data-num value="${s.p}"></label>`
+        : `<div class="fld"><span>Costo</span><div class="muted" style="padding:9px 0">${k === 'lima' ? 'Por distrito (tabla de abajo)' : 'Gratis'}</div></div>`}</div>`).join('')}</div></div>
+  <div class="card"><div class="sec-head" style="margin-bottom:12px"><div><h2 style="margin:0">Delivery Lima: costo por distrito</h2><p class="muted small" id="d-count">${distCount()}</p></div>
+    <div class="r" style="display:flex;gap:10px;flex-wrap:wrap"><label class="btn ghost sm" style="cursor:pointer">Importar Excel<input type="file" id="d-file" accept=".xlsx,.xls" hidden></label>
+      <button type="button" class="btn ghost sm" data-act="sh-export">Descargar Excel</button></div></div>
+    <p class="muted small" style="margin:0 0 12px">Estos distritos aparecen en el menú desplegable del checkout. Los que dicen «No» o no tienen costo se muestran como «sin reparto» y no se pueden elegir. Puedes editar aquí o importar el Excel (<code>costos-envio-distritos.xlsx</code>) y luego guardar.</p>
+    <div class="d-head"><span>Distrito</span><span>¿Se envía?</span><span>Costo (S/)</span><span>Observación</span></div>
+    <div class="d-rows" id="d-rows">${d.districts.map(distRow).join('')}</div></div>`;
+}
+view.addEventListener('input', e => {
+  const t = e.target, f = t.dataset.d; if (!f) return;
+  const row = t.closest('.d-row'), d = D().districts[+row.dataset.i];
+  if (f === 'ship') d.ship = t.value === '1';
+  if (f === 'cost') { const v = parseFloat(t.value); d.cost = t.value === '' || Number.isNaN(v) ? null : Math.max(0, v); }
+  if (f === 'note') d.note = t.value;
+  row.classList.toggle('off', !d.ship); row.classList.toggle('bad', d.ship && d.cost === null);
+  $('#d-count').textContent = distCount(); markDirty();
+});
+let xlsxP = null;
+const loadXLSX = () => xlsxP || (xlsxP = new Promise((ok, no) => {
+  if (window.XLSX) return ok(window.XLSX);
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+  s.onload = () => ok(window.XLSX);
+  s.onerror = () => { xlsxP = null; no(new Error('No se pudo cargar el lector de Excel. Revisa tu conexión.')); };
+  document.head.appendChild(s);
+}));
+const nz = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+async function importShipping(file) {
+  try {
+    const X = await loadXLSX();
+    const wb = X.read(await file.arrayBuffer());
+    const name = wb.SheetNames.find(n => nz(n) === 'envios') || wb.SheetNames.find(n => !/instruc/i.test(n));
+    if (!name) throw new Error('El archivo no tiene hojas con datos.');
+    const rows = X.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+    const ds = D().districts, by = new Map(ds.map(d => [nz(d.name), d]));
+    let n = 0, unknown = [];
+    rows.forEach(r => {
+      const key = w => Object.keys(r).find(k => nz(k).includes(w));
+      const kd = key('distrito'); if (!kd) return;
+      const d = by.get(nz(r[kd])); if (!d) { if (String(r[kd]).trim()) unknown.push(String(r[kd]).trim()); return; }
+      const ke = key('envia'), kc = key('costo'), ko = key('observ');
+      if (ke) d.ship = /^(si|s|1|true|yes)$/.test(nz(r[ke]));
+      if (kc) { const v = parseFloat(String(r[kc]).replace(',', '.')); d.cost = Number.isNaN(v) ? null : Math.max(0, v); }
+      if (ko) d.note = String(r[ko]).trim().slice(0, 100);
+      n++;
+    });
+    if (!n) throw new Error('No encontré distritos en el archivo. Usa la plantilla costos-envio-distritos.xlsx.');
+    markDirty(); renderShipping();
+    const pend = ds.filter(d => d.ship && d.cost === null).length;
+    toast(`Importados ${n} distritos${pend ? ` · ${pend} con «Sí» pero sin costo (se marcan en rojo)` : ''}${unknown.length ? ` · no reconocidos: ${unknown.slice(0, 3).join(', ')}` : ''}. Recuerda guardar los cambios.`, !!pend || !!unknown.length);
+  } catch (err) { toast(err.message, true); }
+}
+async function exportShipping() {
+  try {
+    const X = await loadXLSX();
+    const aoa = [['Provincia', 'Distrito', '¿Se envía?', 'Costo de envío (S/)', 'Observación'], ...D().districts.map(d => [d.zone, d.name, d.ship ? 'Sí' : 'No', d.cost, d.note])];
+    const ws = X.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 14 }, { wch: 22 }, { wch: 44 }];
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Envíos');
+    X.writeFile(wb, 'costos-envio-distritos.xlsx');
+  } catch (err) { toast(err.message, true); }
+}
+view.addEventListener('change', e => { if (e.target.id === 'd-file' && e.target.files[0]) { importShipping(e.target.files[0]); e.target.value = ''; } });
+function shipClick(b, act) { if (act === 'sh-export') exportShipping(); }
+
+/* =====================================================================
    PEDIDOS (se guardan al instante, no usan «Guardar cambios»)
    ===================================================================== */
 const O_STATUS = { pending: 'Esperando pago', review: 'Comprobante por revisar', paid: 'Pagado', preparing: 'En preparación', ready: 'Listo / en camino', delivered: 'Entregado', cancelled: 'Cancelado' };
@@ -1144,8 +1272,8 @@ async function loadOrders() {
   ordBadge();
 }
 async function renderOrders() {
-  view.innerHTML = `<div class="sec-head"><div><h1>Pedidos</h1><p class="muted">Los cambios de estado se guardan al instante. El stock no se descuenta solo: ajústalo en Productos.</p></div>
-    <button class="btn ghost sm" data-act="o-refresh">↻ Actualizar</button></div><div id="o-box"><p class="muted">Cargando pedidos…</p></div>`;
+  view.innerHTML = `<div class="sec-head"><div><h1>Pedidos</h1><p class="muted">Los cambios de estado se guardan al instante.</p></div>
+    <button class="btn ghost sm" data-act="o-refresh">${ic('refresh')} Actualizar</button></div><div id="o-box"><p class="muted">Cargando pedidos…</p></div>`;
   try { await loadOrders(); } catch (e) { $('#o-box').innerHTML = `<p class="form-err">${esc(e.message)}</p>`; return; }
   drawOrders();
 }
@@ -1167,7 +1295,7 @@ function openOrder(code) {
   const first = c.name.split(' ')[0];
   const canPay = ['pending', 'review'].includes(o.status);
   const line = (k, v) => v ? `<div class="o-kv"><span>${k}</span><b>${esc(v)}</b></div>` : '';
-  odlg.innerHTML = `<div class="dlg-head"><h2 id="ord-t">${esc(o.code)} <span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
+  odlg.innerHTML = `<div class="dlg-head"><h2 id="ord-t">${esc(o.code)} <span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
   <div class="dlg-body" data-code="${esc(o.code)}">
     <section class="o-sec"><h3>Cliente</h3>${line('Nombre', c.name)}${line('Celular', c.phone)}${line('Correo', c.email)}
       ${o.doc ? line(o.doc.type === 'boleta' ? 'Boleta · DNI' : 'Factura · RUC', o.doc.type === 'boleta' ? o.doc.dni : `${o.doc.ruc} · ${o.doc.razon}`) : ''}${line('Nota del cliente', o.notes)}</section>
@@ -1186,7 +1314,7 @@ function openOrder(code) {
   </div>
   <div class="dlg-foot"><div class="r">${o.status !== 'cancelled' ? '<button type="button" class="link red" data-act="o-cancel">Cancelar pedido</button>' : ''}</div>
     <div class="r"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/51${esc(c.phone)}?text=${encodeURIComponent(`Hola ${first}, te escribimos de Mamá Virtuosa por tu pedido ${o.code}.`)}">💬 WhatsApp al cliente</a>
-      <a class="btn ghost sm" target="_blank" rel="noopener" href="/#/pedido/${esc(o.code)}/${esc(o.token)}">Ver página del cliente ↗</a></div></div>`;
+      <a class="btn ghost sm" target="_blank" rel="noopener" href="/#/pedido/${esc(o.code)}/${esc(o.token)}">Ver página del cliente ${ic('ext')}</a></div></div>`;
   odlg.setAttribute('aria-labelledby', 'ord-t');
   if (!odlg.open) odlg.showModal();
 }

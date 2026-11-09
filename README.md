@@ -21,11 +21,12 @@ Probar todo en local: `npm install` y `npm run dev` (tienda en `http://localhost
 
 | Sección | Qué permite |
 |---|---|
-| Productos | Crear, editar, duplicar, eliminar; precio, precio anterior, stock, etiqueta, edades, opciones (talla/color), descripción, cuidados; subir varias fotos (se reducen a 1400 px); reordenar arrastrando o con flechas; destacar en «Más vendidos» |
+| Productos | Crear, editar, duplicar, eliminar; precio, precio anterior, etiqueta, mostrar u ocultar el producto, edades, opciones (talla/color), descripción, cuidados; subir varias fotos (se reducen a 1400 px); reordenar arrastrando o con flechas; destacar en «Más vendidos» (máximo 8) |
 | Categorías | Crear, renombrar, ordenar, eliminar; color, textos, columnas del menú desplegable y producto destacado |
 | Podcast | Episodios con título, fecha, duración, tema, producto mencionado y audio; reordenar; temas |
 | Pedidos | Lista con filtros y contador de pagos por confirmar; detalle, comprobante, confirmar pago, cambiar estado, cancelar, WhatsApp al cliente (ver [docs/ventas-y-pedidos.md](docs/ventas-y-pedidos.md)) |
-| Ajustes | WhatsApp, redes, envío gratis, costos de envío, **medios de pago** (Yape/Plin, transferencia BCP, tarjeta con recargo), **cupones** (% o S/, mínimo, vencimiento), páginas de ayuda |
+| Envíos | Envío gratis desde, zonas y **costo de delivery por distrito** de Lima y Callao (editable o con Excel: `costos-envio-distritos.xlsx`) |
+| Ajustes | WhatsApp, redes, envío gratis, **medios de pago** (Yape/Plin, transferencia BCP, tarjeta con recargo), **cupones** (% o S/, mínimo, vencimiento), páginas de ayuda |
 
 ### Cómo funciona
 
@@ -113,7 +114,7 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 
 ## Reglas de negocio
 
-- Envío gratis en Lima desde S/ 150 (`freeShippingFrom`). Delivery Lima S/ 10, provincia S/ 15, recojo en tienda gratis (editable en Ajustes).
+- Envío gratis en Lima desde S/ 150 (`freeShippingFrom`). Delivery Lima según el distrito (S/ 10–15, tabla en Envíos), provincia S/ 15, recojo en tienda gratis.
 - Cupón `BIENVENIDA10`: 10 % sobre el subtotal de productos. Los cupones se validan en el servidor y no se publican.
 - El servidor recalcula precios, envío, cupón y recargo de cada pedido; nunca confía en el navegador.
 - Tarjeta: link de pago por WhatsApp, con recargo opcional.
@@ -127,7 +128,7 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 ## Límites actuales
 
 - Los pedidos y comprobantes se guardan y se gestionan en el panel, pero **no se cobra online**: Yape/transferencia con comprobante y tarjeta con link por WhatsApp.
-- El stock no se descuenta solo al vender; se valida al crear el pedido.
+- No se controla stock: un producto está disponible o está oculto (se oculta desde el panel). Máximo 10 unidades por producto en cada pedido.
 - Newsletter solo muestra un aviso. El reproductor simula la reproducción si el episodio no tiene `audio`.
 - No hay reseñas ni calificaciones: se omitieron a propósito para no mostrar datos falsos.
 - Pendiente cargar en Ajustes → Medios de pago el número de Yape, la cuenta y el CCI reales.

@@ -38,7 +38,7 @@ Principios de diseño:
 ## 3. Carrito
 
 - **Estado**: `localStorage`, clave `mv_cart`. Cada línea: `{ id, opt, qty }` (`opt` = talla/color).
-- **Reglas**: máximo **10 unidades por línea** y nunca más que el stock. Al cargar se descartan productos que ya no existen, están agotados o cuya opción ya no es válida.
+- **Reglas**: máximo **10 unidades por línea**. No se controla stock. Al cargar se descartan productos que ya no existen, están ocultos o cuya opción ya no es válida.
 - **Agregar**: «Agregar al carrito» muestra el aviso «✓ Agregado al carrito · Ver carrito» sin sacar al cliente de la página; «Comprar ahora» lleva directo al checkout.
 - **Cupón**: se valida contra el servidor (`POST /api/orders?op=coupon`). El carrito guarda `{code, type, value, min}` solo para mostrar el descuento; al confirmar, el servidor lo valida de nuevo.
 - **Resumen**: subtotal, ahorro por ofertas, cupón, barra de **envío gratis en Lima** (desde `freeShippingFrom`) y la línea «Paga con Yape, Plin, transferencia…» según los medios activos.
@@ -48,7 +48,7 @@ Principios de diseño:
 Una sola página con tres tarjetas numeradas y el resumen al lado (en celular, desplegable arriba):
 
 1. **Tus datos**: nombres y apellidos en un solo campo, celular de 9 dígitos (WhatsApp), correo opcional y la casilla **«Necesito boleta»**, que al marcarla muestra el campo de **DNI** (8 dígitos). Los campos obligatorios llevan asterisco (*).
-2. **Entrega**: Delivery Lima, Agencia a provincia o Recojo en punto, con su costo y plazo (de Ajustes → Envíos). Delivery pide distrito y dirección; provincia pide además departamento y provincia («agencia y dirección»); **Recojo en tienda** (Jr. San José #389 - Comas, con enlace a Google Maps) no pide dirección.
+2. **Entrega**: Delivery Lima, Agencia a provincia o Recojo en punto, con su costo y plazo (de Ajustes → Envíos). **Delivery Lima** pide el distrito en un **menú desplegable** (los 50 distritos de Lima y Callao; los que no tienen reparto aparecen deshabilitados como «sin reparto», con enlace para consultar por WhatsApp) y la dirección; el costo de envío sale del distrito elegido; provincia pide además departamento y provincia («agencia y dirección»); **Recojo en tienda** (Jr. San José #389 - Comas, con enlace a Google Maps) no pide dirección.
 3. **Forma de pago**: Yape/Plin, Transferencia bancaria (BCP) y Tarjeta (link por WhatsApp). Cada una explica qué pasa al confirmar.
 
 Además: nota opcional de hasta 300 caracteres y aceptación de términos.
@@ -65,7 +65,7 @@ Además: nota opcional de hasta 300 caracteres y aceptación de términos.
 ```
 subtotal   = Σ precio_actual × cantidad          (precio del catálogo, nunca del navegador)
 descuento  = cupón (solo sobre productos)
-envío      = costo de la zona (0 en Lima si subtotal ≥ freeShippingFrom; 0 en recojo)
+envío      = costo del distrito (Lima/Callao) o de la zona (provincia); 0 en Lima si subtotal ≥ freeShippingFrom; 0 en recojo
 recargo    = (subtotal − descuento + envío) × % recargo   solo si paga con tarjeta
 TOTAL      = subtotal − descuento + envío + recargo
 ```
@@ -108,6 +108,14 @@ Pestaña **Pedidos** (primera de la barra), con un **contador rojo** de pagos po
 - **Estados**: `pending` · `review` · `paid` · `preparing` · `ready` · `delivered` · `cancelled`. Cada cambio queda en el historial con fecha.
 - **Stock**: no se descuenta solo al vender (evita pisar lo que se edita en Productos). Se valida al crear el pedido, pero conviene ajustarlo en **Productos** al confirmar el pago.
 
+## 7b. Panel admin → Envíos
+
+Pestaña **Envíos** con dos bloques:
+
+- **Zonas de entrega**: «Envío gratis en Lima desde», y nombre/plazo de Delivery Lima, Agencia a provincia (con su costo) y Recojo en tienda.
+- **Delivery Lima: costo por distrito**: tabla de 50 distritos (43 de Lima + 7 del Callao) con **¿Se envía? (Sí/No)**, **costo** y **observación**. Las filas «No» se ven en gris y las «Sí» sin costo en rojo (al guardar quedan como sin reparto). Estos distritos alimentan el desplegable del checkout, y el servidor vuelve a validar el distrito y su costo al crear el pedido.
+- **Importar Excel / Descargar Excel**: la plantilla es [costos-envio-distritos.xlsx](../costos-envio-distritos.xlsx) (hoja «Envíos»; creada a partir de la hoja CDM de AC Mueblería, con sus costos iniciales). Se edita en Excel, se importa y se pulsa **Guardar cambios**. El lector de Excel (SheetJS) se carga solo al importar o descargar. Los nombres de distrito son fijos: no se agregan ni se borran filas.
+
 ## 8. API
 
 ### Pública — `/api/orders`
@@ -121,7 +129,7 @@ Todas las escrituras exigen la cabecera `X-Requested-With: mv-shop`.
 | `POST` | `?op=coupon` `{ code, subtotal }` | Valida el cupón y devuelve su regla y descuento. |
 | `POST` | `?op=proof` `{ c, t, img }` | Sube el comprobante (data URL). |
 
-Validaciones del servidor: producto existente y con stock; cantidad 1–10 y ≤ stock; opción válida (talla/color); celular de 9 dígitos; dirección según la zona; medio de pago activo; DNI de 8 dígitos si pide boleta; honeypot.
+Validaciones del servidor: producto existente y visible (no oculto); cantidad 1–10; opción válida (talla/color); celular de 9 dígitos; dirección según la zona; medio de pago activo; DNI de 8 dígitos si pide boleta; honeypot.
 
 ### Admin — `/api/orders-admin` (requiere sesión)
 
@@ -167,7 +175,5 @@ Validaciones del servidor: producto existente y con stock; cantidad 1–10 y ≤
 
 ## 13. Pendientes recomendados
 
-- Descontar el stock automáticamente al confirmar el pago.
-- Tarifas de envío por distrito (hoy hay tres zonas: Lima, provincia y recojo).
 - Dirección del punto de recojo (hoy se coordina por WhatsApp).
 - Pasarela automática (Izipay / Mercado Pago) para cobrar tarjeta sin intervención.

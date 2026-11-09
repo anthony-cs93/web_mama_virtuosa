@@ -80,6 +80,69 @@ export const PAY_DEFAULTS = {
   bank: { on: true, bank: 'BCP', account: '', cci: '', holder: '' },
   card: { on: true, surcharge: 0 }
 };
+/* Distritos de reparto en Lima y Callao: [distrito, zona, ¿se envía?, costo S/, observación].
+   Los nombres son fijos; lo que se edita en el panel (Envíos) es si se envía, el costo y la observación. */
+const DISTRICTS = [
+  ["Ancón", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Ate", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Barranco", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Breña", "Lima", true, 10, ""],
+  ["Carabayllo", "Lima", true, 10, ""],
+  ["Chaclacayo", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Chorrillos", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Cieneguilla", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Comas", "Lima", true, 10, ""],
+  ["El Agustino", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Independencia", "Lima", true, 10, ""],
+  ["Jesús María", "Lima", true, 10, ""],
+  ["La Molina", "Lima", true, 12, ""],
+  ["La Victoria", "Lima", true, 10, ""],
+  ["Lima (Cercado)", "Lima", true, 10, ""],
+  ["Lince", "Lima", true, 10, ""],
+  ["Los Olivos", "Lima", true, 10, ""],
+  ["Lurigancho (Chosica)", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Lurín", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Magdalena del Mar", "Lima", true, 10, ""],
+  ["Miraflores", "Lima", true, 10, ""],
+  ["Pachacámac", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Pucusana", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Pueblo Libre", "Lima", true, 10, ""],
+  ["Puente Piedra", "Lima", true, 12, ""],
+  ["Punta Hermosa", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Punta Negra", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Rímac", "Lima", true, 10, ""],
+  ["San Bartolo", "Lima", false, null, "Fuera de zona de reparto"],
+  ["San Borja", "Lima", true, 12, ""],
+  ["San Isidro", "Lima", true, 10, ""],
+  ["San Juan de Lurigancho", "Lima", true, 12, ""],
+  ["San Juan de Miraflores", "Lima", true, 15, ""],
+  ["San Luis", "Lima", true, 12, ""],
+  ["San Martín de Porres", "Lima", true, 10, ""],
+  ["San Miguel", "Lima", true, 10, ""],
+  ["Santa Anita", "Lima", true, 12, ""],
+  ["Santa María del Mar", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Santa Rosa", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Santiago de Surco", "Lima", true, 10, ""],
+  ["Surquillo", "Lima", true, 10, ""],
+  ["Villa El Salvador", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Villa María del Triunfo", "Lima", false, null, "Fuera de zona de reparto"],
+  ["Bellavista", "Callao", true, 10, ""],
+  ["Callao", "Callao", true, 12, ""],
+  ["Carmen de la Legua Reynoso", "Callao", true, 12, ""],
+  ["La Perla", "Callao", true, 12, ""],
+  ["La Punta", "Callao", true, 12, ""],
+  ["Mi Perú", "Callao", false, null, "Fuera de zona de reparto"],
+  ["Ventanilla", "Callao", false, null, "Fuera de zona de reparto"]
+];
+export function normDistricts(src) {
+  const by = new Map((Array.isArray(src) ? src : []).map(d => [d && d.name, d]));
+  return DISTRICTS.map(([name, zone, ship, cost, note]) => {
+    const d = by.get(name) || { ship, cost, note };
+    const c = d.cost === null || d.cost === '' || d.cost === undefined ? null : Math.max(0, Math.round(Number(d.cost) * 100) / 100);
+    const ok = d.ship === true && c !== null && !Number.isNaN(c);
+    return { name, zone, ship: ok, cost: Number.isNaN(c) ? null : c, note: String(d.note ?? '').trim().slice(0, 100) };
+  });
+}
 /* Cupones: { CÓDIGO: { type: 'pct' | 'amt', value, min, expires: 'AAAA-MM-DD' | '', active } }. El formato antiguo era { CÓDIGO: 0.1 } */
 export function normCoupons(src) {
   const out = {};
@@ -111,21 +174,31 @@ export function migrateConfig(store) {
   }
   c.pay = pay;
   c.coupons = normCoupons(c.coupons);
+  if (store.data && typeof store.data === 'object') store.data.districts = normDistricts(store.data.districts);
+  return store;
+}
+/* Sin control de stock: los productos agotados (stock 0) pasan a «ocultos» y se elimina el campo stock. */
+export function migrateStock(store) {
+  const d = store && store.data;
+  if (!d || !Array.isArray(d.products)) return store;
+  for (const p of d.products) {
+    if ('stock' in p) { if (!(p.stock > 0) && p.active === undefined) p.active = false; delete p.stock; }
+  }
   return store;
 }
 export async function readStore() {
   if (LOCAL) {
-    try { return { store: migrateConfig(migrateFilters(JSON.parse(await readFile(join(LOCAL_DIR, 'store.json'), 'utf8')))), fromBlob: false }; } catch { /* sin copia local: se usa la semilla */ }
+    try { return { store: migrateConfig(migrateStock(migrateFilters(JSON.parse(await readFile(join(LOCAL_DIR, 'store.json'), 'utf8'))))), fromBlob: false }; } catch { /* sin copia local: se usa la semilla */ }
   }
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { blobs } = await list({ prefix: STORE_PATH, limit: 1 });
     const b = blobs.find(x => x.pathname === STORE_PATH);
     if (b) {
       const r = await fetch(b.url + '?t=' + Date.now(), { cache: 'no-store' });
-      if (r.ok) return { store: migrateConfig(migrateFilters(await r.json())), fromBlob: true };
+      if (r.ok) return { store: migrateConfig(migrateStock(migrateFilters(await r.json()))), fromBlob: true };
     }
   }
-  return { store: migrateConfig(migrateFilters(await readSeed())), fromBlob: false };
+  return { store: migrateConfig(migrateStock(migrateFilters(await readSeed()))), fromBlob: false };
 }
 export async function writeStore(store) {
   const body = JSON.stringify(store, null, 2);
@@ -148,6 +221,7 @@ export function validate(store) {
   }
   if (d.heroes !== undefined && !Array.isArray(d.heroes)) return 'Campañas inválidas';
   if (d.hero !== undefined && (typeof d.hero !== 'object' || d.hero === null || Array.isArray(d.hero))) return 'Portada inválida';
+  if (d.featured.length > 8) return 'Máximo 8 productos destacados en el inicio';
   const ids = new Set();
   for (const p of d.products) {
     if (!p || !Number.isInteger(p.id) || ids.has(p.id)) return 'Producto con id inválido o repetido';

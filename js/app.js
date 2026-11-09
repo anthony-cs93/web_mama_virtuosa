@@ -1,6 +1,7 @@
 (() => {
 'use strict';
 const C = window.MV_CONFIG, D = window.MV_DATA;
+D.products = D.products.filter(p => p.active !== false);   // los productos ocultos desde el panel no existen para la tienda
 
 /* ---------- utilidades ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -31,9 +32,9 @@ function waLink(msg) {
 
 /* ---------- carrito ---------- */
 const MAX_QTY = 10;
-const maxQty = p => Math.min(MAX_QTY, p.stock);
+const maxQty = () => MAX_QTY;
 const r2 = n => Math.round(n * 100) / 100;
-const validLine = l => { const p = l && P(l.id); return !!p && p.stock > 0 && l.qty > 0 && (!p.opt || !p.opt.values || !p.opt.values.length || p.opt.values.includes(l.opt)); };
+const validLine = l => { const p = l && P(l.id); return !!p && l.qty > 0 && (!p.opt || !p.opt.values || !p.opt.values.length || p.opt.values.includes(l.opt)); };
 let cart = store.get('mv_cart', []).filter(validLine).map(l => ({ id: l.id, opt: l.opt || null, qty: Math.min(Math.floor(l.qty), maxQty(P(l.id))) }));
 let coupon = store.get('mv_coupon', null);   // { code, type, value, min }: lo valida el servidor al aplicarlo y otra vez al confirmar
 if (!coupon || typeof coupon !== 'object') coupon = null;
@@ -69,8 +70,16 @@ const surchargePct = () => Number((PAYCFG.card && PAYCFG.card.surcharge) || 0);
 const PAY_SHORT = { yape: 'Yape', bank: 'transferencia', card: 'tarjeta' };
 const payNames = () => { const n = payKeys().map(k => PAY_SHORT[k]); if (payKeys().includes('yape')) n.splice(1, 0, 'Plin'); return n.join(', '); };
 
+const districts = () => D.districts || [];
+const sendable = () => districts().filter(d => d.ship && d.cost !== null);
+const districtOf = name => sendable().find(d => d.name === name);
+/* Costo de envío; en Lima depende del distrito (null = aún no lo elige) */
 function shipCost(sub, ship) {
-  if (ship === 'lima' && C.freeShippingFrom > 0 && sub >= C.freeShippingFrom) return 0;
+  if (ship === 'lima') {
+    if (C.freeShippingFrom > 0 && sub >= C.freeShippingFrom) return 0;
+    const d = districtOf(ui.co.f.distrito);
+    return d ? d.cost : null;
+  }
   return D.shipping[ship].p;
 }
 const couponLabel = c => c.type === 'pct' ? `${c.value}% de descuento` : `S/ ${c.value} de descuento`;
@@ -83,10 +92,10 @@ function totals(ship, pay) {
   const regular = r2(cart.reduce((a, l) => { const p = P(l.id); return a + (p.old > p.price ? p.old : p.price) * l.qty; }, 0));
   const count = cart.reduce((a, l) => a + l.qty, 0);
   const disc = couponDisc(sub);
-  const sh = ship ? shipCost(sub, ship) : 0;
+  const shRaw = ship ? shipCost(sub, ship) : 0, sh = shRaw === null ? 0 : shRaw;
   const base = r2(sub - disc + sh);
   const sur = pay === 'card' && surchargePct() > 0 ? r2(base * surchargePct() / 100) : 0;
-  return { sub, regular, savings: r2(regular - sub), count, disc, sh, sur, total: r2(base + sur) };
+  return { sub, regular, savings: r2(regular - sub), count, disc, sh, shPending: shRaw === null, sur, total: r2(base + sur) };
 }
 async function shopApi(url, body) {
   let r;
@@ -166,7 +175,7 @@ function heroHTML() {
 
 /* ---------- inicio ---------- */
 function pageHome() {
-  const best = (D.featured || []).map(P).filter(p => p && p.stock > 0).slice(0, 8);
+  const best = (D.featured || []).map(P).filter(Boolean).slice(0, 8);
   return {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
@@ -211,7 +220,7 @@ function filtered() {
   const list = F.base.filter(p =>
     (!F.subs.size || F.subs.has(p.sub)) && F.fl.every(f => !F.sel[f.id].size || pvals(p, f).some(v => F.sel[f.id].has(v))) &&
     p.price >= F.min && p.price <= F.max &&
-    (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old) && p.stock > 0);
+    (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old));
   const by = {
     sales: (a, b) => (a.tag === 'Top' ? 0 : 1) - (b.tag === 'Top' ? 0 : 1),
     new: (a, b) => (a.tag === 'Nuevo' ? 0 : 1) - (b.tag === 'Nuevo' ? 0 : 1),
@@ -241,7 +250,7 @@ function listPage({ title, crumbList, base, sub, pending, showSubs = true, filte
   const hasAges = base.some(p => p.ages && p.ages.length);
   /* un bloque por cada filtro configurado en el panel; solo se listan las opciones que tienen productos */
   const filterHtml = filters.map(f => {
-    const opts = f.options.map(o => [o, base.filter(p => p.stock > 0 && pvals(p, f).includes(o)).length]).filter(x => x[1]);
+    const opts = f.options.map(o => [o, base.filter(p => pvals(p, f).includes(o)).length]).filter(x => x[1]);
     if (!opts.length) return '';
     return `<fieldset><legend>${esc(f.name)}</legend>
         <label class="chk"><input type="checkbox" data-f="fall" data-fid="${esc(f.id)}" checked> Todas</label>
@@ -316,10 +325,9 @@ function pageSearch(q) {
 function pageProduct(id) {
   const p = P(+id); if (!p) return pageNotFound();
   ui.pdp = { qty: 1, opt: p.opt ? p.opt.values[0] : null, img: 0 };
-  const others = D.products.filter(o => o.id !== p.id && o.stock > 0);
+  const others = D.products.filter(o => o.id !== p.id);
   const related = [...others.filter(o => o.cat === p.cat), ...others.filter(o => o.cat !== p.cat)].slice(0, 4);
   const gal = pics(p), n = gal.length || 3;
-  const stockTxt = p.stock <= 10 ? `Stock disponible: ${p.stock} unidades` : 'Stock disponible';
   const qtyCtl = cls => `<div class="qty ${cls || ''}"><button type="button" data-act="pdp-qty" data-d="-1" aria-label="Menos">–</button><output data-qty-out aria-live="polite">1</output><button type="button" data-act="pdp-qty" data-d="1" aria-label="Más">+</button></div>`;
   const html = `
 <div class="pdp">
@@ -343,7 +351,7 @@ function pageProduct(id) {
       <div class="buy-row desk">${qtyCtl()}<button class="btn" data-act="pdp-add">Agregar al carrito</button></div>
       <button class="btn ghost" data-act="pdp-buy">Comprar ahora</button>
       <button class="btn wa" data-act="wa" data-msg="${esc('Hola Angie, me interesa: ' + p.name)}">💬 Consultar por WhatsApp</button>
-      <div class="perks">🚚 Lima 2–4 días · provincias 4–7 días<br>↺ Cambios hasta 7 días<br>✔ ${stockTxt}</div>
+      <div class="perks">🚚 Lima 2–4 días · provincias 4–7 días<br>↺ Cambios hasta 7 días<br>✔ Disponible</div>
       <div class="acc">
         <details open><summary>Descripción</summary><p>${esc(p.desc)}</p></details>
         ${p.care ? `<details><summary>Medidas y cuidados</summary><p>${esc(p.care)}</p></details>` : ''}
@@ -388,7 +396,7 @@ function cartView() {
     ${free ? `<div class="free-bar" role="status">${need > 0 ? `Te faltan <b>${fmt(need)}</b> para envío gratis en Lima` : '¡Tienes envío gratis en Lima!'}<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>` : ''}
     <div class="lines">${cart.map((l, i) => { const p = P(l.id), cap = maxQty(p); return `<div class="line">
       <div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
-      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u${p.stock <= 5 ? ` · <b>quedan ${p.stock}</b>` : ''}</div>
+      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u</div>
         <button class="link ul" data-act="line-rm" data-i="${i}">Quitar</button></div>
       <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos" ${l.qty <= 1 ? 'disabled' : ''}>–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más" ${l.qty >= cap ? 'disabled' : ''}>+</button></div>
       <div class="tot">${fmt(p.price * l.qty)}</div></div>`; }).join('')}</div>
@@ -433,6 +441,7 @@ const applies = k => {
 };
 const fieldError = k => {
   const d = FIELDS[k], v = (ui.co.f[k] || '').trim();
+  if (k === 'distrito' && ui.co.ship === 'lima') return !v ? 'Elige tu distrito' : districtOf(v) ? '' : 'Elige un distrito con reparto';
   if (!v) return d.opt ? '' : 'Completa este campo';
   return d.test && !d.test(v) ? d.msg : '';
 };
@@ -443,10 +452,21 @@ const fld = (k, extra = '', label) => {
     ${d.area ? `<textarea ${attrs} rows="2" maxlength="${d.max}">${esc(v)}</textarea>` : `<input ${attrs} type="${d.type || 'text'}" value="${esc(v)}"${d.type === 'tel' ? ' inputmode="numeric"' : ''}>`}
     <div class="msg" id="e-${k}">${e ? esc(e) : ''}</div></div>`;
 };
+const money0 = n => 'S/ ' + (Number.isInteger(n) ? n : n.toFixed(2));
+function districtSelect() {
+  const v = ui.co.f.distrito || '', e = ui.co.err.distrito;
+  const opt = d => `<option value="${esc(d.name)}"${d.name === v ? ' selected' : ''}${d.ship && d.cost !== null ? '' : ' disabled'}>${esc(d.name)} — ${d.ship && d.cost !== null ? money0(d.cost) : 'sin reparto'}</option>`;
+  const group = z => `<optgroup label="${z === 'Callao' ? 'Callao' : 'Lima Metropolitana'}">${districts().filter(d => d.zone === z).map(opt).join('')}</optgroup>`;
+  return `<div class="fld ${e ? 'err' : ''}" data-fld="distrito"><label for="f-distrito">Distrito<span class="req" aria-hidden="true"> *</span></label>
+    <select id="f-distrito" name="distrito" data-co="distrito" autocomplete="address-level3" aria-required="true"${e ? ' aria-invalid="true"' : ''} aria-describedby="e-distrito">
+      <option value=""${v ? '' : ' selected'}>Elige tu distrito</option>${group('Lima')}${group('Callao')}</select>
+    <div class="msg" id="e-distrito">${e ? esc(e) : ''}</div>
+    <div class="hint">¿Tu distrito no aparece? <a href="#" data-act="wa" data-msg="Hola Angie, quisiera consultar si hacen delivery a mi distrito.">Consúltanos por WhatsApp</a>.</div></div>`;
+}
 function showErr(k, msg) {
   const w = $(`[data-fld="${k}"]`); if (!w) return;
   w.classList.toggle('err', !!msg); $('.msg', w).textContent = msg || '';
-  const i = $('input,textarea', w); if (msg) i.setAttribute('aria-invalid', 'true'); else i.removeAttribute('aria-invalid');
+  const i = $('input,textarea,select', w); if (msg) i.setAttribute('aria-invalid', 'true'); else i.removeAttribute('aria-invalid');
 }
 function validateAll() {
   const st = ui.co, err = {};
@@ -477,7 +497,7 @@ function summaryHTML(inner) {
     ${t.savings ? `<div class="srow muted" style="border-top:1px solid var(--line);padding-top:12px"><span>Precio regular</span><s>${fmt(t.regular)}</s></div>` : ''}
     <div class="srow"${t.savings ? '' : ' style="border-top:1px solid var(--line);padding-top:12px"'}><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
     ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon.code)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
-    <div class="srow"><span>Envío</span><span>${t.sh === 0 ? 'Gratis' : fmt(t.sh)}</span></div>
+    <div class="srow"><span>Envío</span><span>${t.shPending ? '<span class="muted">Elige tu distrito</span>' : t.sh === 0 ? 'Gratis' : fmt(t.sh)}</span></div>
     ${t.sur ? `<div class="srow"><span>Recargo tarjeta (${surchargePct()}%)</span><span>${fmt(t.sur)}</span></div>` : ''}
     <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
     ${t.savings + t.disc > 0 ? `<div class="save-note">¡Ahorras ${fmt(r2(t.savings + t.disc))} en esta compra!</div>` : ''}
@@ -485,7 +505,12 @@ function summaryHTML(inner) {
 }
 function checkoutView() {
   const st = ui.co, t = totals(st.ship, st.pay);
-  const shipEntries = Object.keys(D.shipping).map(k => { const o = D.shipping[k], c = shipCost(t.sub, k); return k === 'pick' ? { k, l: PICKUP.l, s: PICKUP.addr, price: 'Gratis' } : { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : fmt(c) }; });
+  const minLima = sendable().length ? Math.min(...sendable().map(d => d.cost)) : 0;
+  const shipEntries = Object.keys(D.shipping).map(k => {
+    const o = D.shipping[k], c = shipCost(t.sub, k);
+    if (k === 'pick') return { k, l: PICKUP.l, s: PICKUP.addr, price: 'Gratis' };
+    return { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : c === null ? 'Desde ' + money0(minLima) : fmt(c) };
+  });
   const payEntries = payKeys().map(k => ({ k, l: PAY_META[k].l, s: PAY_META[k].s, price: k === 'card' && surchargePct() > 0 ? '+' + surchargePct() + '%' : '' }));
   const mSum = `<details class="sum-m"><summary><span>Resumen del pedido (${t.count})</span><b>${fmt(t.total)} ⌄</b></summary><div class="in">${summaryHTML(true)}</div></details>`;
   return `<div class="co-page"><h1 class="sr">Finalizar compra</h1>
@@ -502,7 +527,7 @@ function checkoutView() {
         ${choiceHTML('ship', shipEntries, st.ship)}
         ${st.ship === 'pick' ? `<div class="pay-note">Recoge tu pedido en <b>${PICKUP.addr}</b>. ${mapLink}<br>No necesitas ingresar dirección; te avisaremos por WhatsApp cuando esté listo.</div>` :
           st.ship === 'prov' ? `<div class="row2">${fld('depto')}${fld('prov')}</div>${fld('distrito')}${fld('dir', '', 'Agencia y dirección de entrega')}${fld('ref')}` :
-          `${fld('distrito')}${fld('dir')}${fld('ref')}`}</section>
+          `${districtSelect()}${fld('dir')}${fld('ref')}`}</section>
       <section class="co-card" aria-labelledby="h-pago"><h2 id="h-pago"><i>3</i>Forma de pago</h2>
         ${choiceHTML('pay', payEntries, st.pay)}${payNote(t)}</section>
       <section class="co-card" aria-label="Detalles adicionales">
@@ -788,7 +813,7 @@ function markNav(seg) {
 function buildDrawer() {
   $('#drawer-body').innerHTML = D.catOrder.map((c, i) => {
     const f1 = filtersOf(c)[0];
-    const subs = f1 ? f1.options.filter(o => D.products.some(p => p.cat === c && p.stock > 0 && pvals(p, f1).includes(o))) : [...new Set(D.products.filter(p => p.cat === c).map(p => p.sub).filter(Boolean))];
+    const subs = f1 ? f1.options.filter(o => D.products.some(p => p.cat === c && pvals(p, f1).includes(o))) : [...new Set(D.products.filter(p => p.cat === c).map(p => p.sub).filter(Boolean))];
     return `<div class="d-item"><button data-act="d-acc" aria-expanded="false" aria-controls="ds-${i}"><span>${esc(c)}</span><span aria-hidden="true">⌄</span></button>
       <div class="d-sub" id="ds-${i}" hidden>${subs.map(s => `<a href="${catHref(c, s)}" data-act="drawer-close">${esc(s)}</a>`).join('')}<a href="${catHref(c)}" data-act="drawer-close"><b>Ver todo ${esc(c)}</b></a></div></div>`;
   }).join('') +
@@ -866,7 +891,7 @@ const actions = {
     const url = C.social[el.dataset.net];
     if (url) window.open(url, '_blank', 'noopener'); else toast('Enlace de ' + el.dataset.net + ' próximamente');
   },
-  'pdp-qty'(el) { const p = P(currentProductId()); ui.pdp.qty = Math.max(1, Math.min(p.stock, ui.pdp.qty + (+el.dataset.d))); syncPDP(); },
+  'pdp-qty'(el) { const p = P(currentProductId()); ui.pdp.qty = Math.max(1, Math.min(MAX_QTY, ui.pdp.qty + (+el.dataset.d))); syncPDP(); },
   'pdp-opt'(el) { ui.pdp.opt = el.dataset.v; syncPDP(); },
   'pdp-img'(el) { ui.pdp.img = +el.dataset.i; syncPDP(); },
   'pdp-add'() {
@@ -911,6 +936,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   const t = e.target, f = t.dataset.f;
+  if (t.dataset.co === 'distrito' && ui.co.ship === 'lima') { ui.co.f.distrito = t.value; store.set('mv_fields', Object.fromEntries(Object.entries(ui.co.f).filter(([k]) => !['notes', 'dni'].includes(k)))); delete ui.co.err.distrito; render(true); const n = $('#f-distrito'); if (n) n.focus(); return; }
   if (t.dataset.coCheck) {
     ui.co[t.dataset.coCheck] = t.checked;
     if (t.dataset.coCheck === 'doc') { ui.co.err = {}; render(true); const n = $('#f-dni'); if (t.checked && n) n.focus(); else $('[data-co-check=doc]').focus(); }

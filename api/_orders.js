@@ -45,10 +45,10 @@ export function buildOrder(store, b) {
   if (!Array.isArray(b.items) || !b.items.length || b.items.length > 30) throw new Fail('Tu carrito está vacío');
   const items = b.items.map(it => {
     const p = data.products.find(x => x.id === Number(it && it.id));
-    if (!p || !(p.stock > 0)) throw new Fail('Un producto de tu carrito ya no está disponible');
+    if (!p || p.active === false) throw new Fail('Un producto de tu carrito ya no está disponible');
     const qty = Math.floor(Number(it.qty));
     if (!(qty >= 1)) throw new Fail('Cantidad no válida');
-    if (qty > Math.min(MAX_QTY, p.stock)) throw new Fail(p.stock < MAX_QTY ? `De «${p.name}» solo quedan ${p.stock} unidades` : `Máximo ${MAX_QTY} unidades por producto`);
+    if (qty > MAX_QTY) throw new Fail(`Máximo ${MAX_QTY} unidades por producto`);
     let opt = null;
     if (p.opt && p.opt.values && p.opt.values.length) {
       opt = txt(it.opt, 40);
@@ -65,17 +65,21 @@ export function buildOrder(store, b) {
   if (!zone) throw new Fail('Elige cómo quieres recibir tu pedido');
   const ship = b.ship;
   const address = { depto: '', prov: '', distrito: '', dir: '', ref: '' };
+  let distCost = null;
   if (ship !== 'pick') {
     address.distrito = txt(b.address && b.address.distrito, 60);
     address.dir = txt(b.address && b.address.dir, 160);
     address.ref = txt(b.address && b.address.ref, 160);
-    if (ship === 'lima') { address.depto = 'Lima'; address.prov = 'Lima'; }
-    else { address.depto = txt(b.address && b.address.depto, 60); address.prov = txt(b.address && b.address.prov, 60); if (!address.depto || !address.prov) throw new Fail('Indica departamento y provincia'); }
+    if (ship === 'lima') {
+      const dd = (data.districts || []).find(d => d.name === address.distrito);
+      if (!dd || !dd.ship || dd.cost === null) throw new Fail('Elige un distrito con reparto');
+      address.depto = 'Lima'; address.prov = dd.zone; distCost = dd.cost;
+    } else { address.depto = txt(b.address && b.address.depto, 60); address.prov = txt(b.address && b.address.prov, 60); if (!address.depto || !address.prov) throw new Fail('Indica departamento y provincia'); }
     if (!address.distrito) throw new Fail('Indica tu distrito');
     if (address.dir.length < 5) throw new Fail(ship === 'prov' ? 'Indica la agencia o dirección de entrega' : 'Escribe tu dirección completa');
   }
   const free = ship === 'lima' && config.freeShippingFrom > 0 && sub >= config.freeShippingFrom;
-  const shipCost = free ? 0 : r2(Number(zone.p) || 0);
+  const shipCost = free ? 0 : r2(ship === 'lima' ? distCost : ship === 'pick' ? 0 : Number(zone.p) || 0);
 
   /* pago */
   const method = String(b.pay || '');
