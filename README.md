@@ -25,7 +25,7 @@ Probar todo en local: `npm install` y `npm run dev` (tienda en `http://localhost
 | Categorías | Crear, renombrar, ordenar, eliminar; color, textos, columnas del menú desplegable y producto destacado |
 | Podcast | Episodios con título, fecha, duración, tema, producto mencionado y audio; reordenar; temas |
 | Pedidos | Lista con filtros y contador de pagos por confirmar; detalle, comprobante, confirmar pago, cambiar estado, cancelar, WhatsApp al cliente (ver [docs/ventas-y-pedidos.md](docs/ventas-y-pedidos.md)) |
-| Ajustes | WhatsApp, redes, envío gratis, costos de envío, **medios de pago** (Yape/Plin, transferencia, tarjeta con recargo, contra entrega), **cupones** (% o S/, mínimo, vencimiento), páginas de ayuda |
+| Ajustes | WhatsApp, redes, envío gratis, costos de envío, **medios de pago** (Yape/Plin, transferencia BCP, tarjeta con recargo), **cupones** (% o S/, mínimo, vencimiento), páginas de ayuda |
 
 ### Cómo funciona
 
@@ -113,10 +113,10 @@ Degradado de la portada: `linear-gradient(115deg, #fcfcc8, #f8dcc6, #fbbad9, #c8
 
 ## Reglas de negocio
 
-- Envío gratis en Lima desde S/ 150 (`freeShippingFrom`). Delivery Lima S/ 10, provincia S/ 15, recojo gratis (editable en Ajustes).
+- Envío gratis en Lima desde S/ 150 (`freeShippingFrom`). Delivery Lima S/ 10, provincia S/ 15, recojo en tienda gratis (editable en Ajustes).
 - Cupón `BIENVENIDA10`: 10 % sobre el subtotal de productos. Los cupones se validan en el servidor y no se publican.
 - El servidor recalcula precios, envío, cupón y recargo de cada pedido; nunca confía en el navegador.
-- Pago contra entrega solo en Lima. Tarjeta: link de pago por WhatsApp, con recargo opcional.
+- Tarjeta: link de pago por WhatsApp, con recargo opcional.
 - Cambios hasta 7 días.
 
 ## Configuración pendiente

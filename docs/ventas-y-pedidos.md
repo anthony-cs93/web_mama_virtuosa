@@ -19,7 +19,7 @@ Principios de diseño:
 
 - **El servidor manda sobre los precios.** El navegador solo envía qué producto, opción y cantidad quiere el cliente. Precios, cupón, envío y recargo se recalculan en `buildOrder()` ([api/_orders.js](../api/_orders.js)) contra el catálogo publicado. Lo que se ve en pantalla es una vista previa.
 - **Cada pedido es un archivo JSON propio** en Vercel Blob (`pedidos/<CÓDIGO>-<token>.json`). El `token` es aleatorio (128 bits): solo quien tiene el enlace puede ver el pedido. El listado completo solo lo ve el panel.
-- **Sin pasarela obligatoria.** Se paga por Yape/Plin, transferencia o tarjeta mediante un link de pago que Angie envía por WhatsApp. Contra entrega solo en Lima. Nunca se piden datos de tarjeta en la web.
+- **Sin pasarela obligatoria.** Se paga por Yape/Plin, transferencia (BCP) o tarjeta mediante un link de pago que Angie envía por WhatsApp. Nunca se piden datos de tarjeta en la web.
 - **Los datos de pago se editan en el panel** (Ajustes → Medios de pago), no en el código.
 
 ## 2. Archivos
@@ -47,11 +47,11 @@ Principios de diseño:
 
 Una sola página con tres tarjetas numeradas y el resumen al lado (en celular, desplegable arriba):
 
-1. **Tus datos**: nombres, apellidos, celular de 9 dígitos (WhatsApp) y correo opcional.
-2. **Entrega**: Delivery Lima, Agencia a provincia o Recojo en punto, con su costo y plazo (de Ajustes → Envíos). Delivery pide distrito y dirección; provincia pide además departamento y provincia («agencia y dirección»); recojo no pide nada y se coordina por WhatsApp.
-3. **Forma de pago**: Yape/Plin, Transferencia, Tarjeta (link por WhatsApp) y Contra entrega (deshabilitado fuera de Lima). Cada una explica qué pasa al confirmar.
+1. **Tus datos**: nombres y apellidos en un solo campo, celular de 9 dígitos (WhatsApp), correo opcional y la casilla **«Necesito boleta»**, que al marcarla muestra el campo de **DNI** (8 dígitos). Los campos obligatorios llevan asterisco (*).
+2. **Entrega**: Delivery Lima, Agencia a provincia o Recojo en punto, con su costo y plazo (de Ajustes → Envíos). Delivery pide distrito y dirección; provincia pide además departamento y provincia («agencia y dirección»); **Recojo en tienda** (Jr. San José #389 - Comas, con enlace a Google Maps) no pide dirección.
+3. **Forma de pago**: Yape/Plin, Transferencia bancaria (BCP) y Tarjeta (link por WhatsApp). Cada una explica qué pasa al confirmar.
 
-Además: casilla **«Necesito boleta o factura»** (Boleta → DNI de 8 dígitos; Factura → RUC de 11 + razón social), nota opcional de hasta 300 caracteres y aceptación de términos.
+Además: nota opcional de hasta 300 caracteres y aceptación de términos.
 
 **Experiencia de formulario**
 - Los errores aparecen al salir de cada campo y se corrigen en vivo al escribir; al confirmar con errores el foco va al primero.
@@ -82,7 +82,7 @@ Al confirmar, el cliente llega aquí (el enlace funciona desde cualquier disposi
 
 Contenido: **seguimiento con pasos y fecha**, instrucciones de pago según el medio, entrega con plazo, resumen y botón de WhatsApp con el pedido ya escrito.
 
-`Esperando pago → Comprobante en revisión (Yape/transferencia) → Pago confirmado → En preparación → Listo para recoger / En camino → Entregado` (y `Cancelado`). En pedidos **contra entrega** el primer paso se llama «Pedido recibido» y no hay pasos de pago.
+`Esperando pago → Comprobante en revisión (Yape/transferencia) → Pago confirmado → En preparación → Listo para recoger / En camino → Entregado` (y `Cancelado`).
 
 ## 6. Medios de pago
 
@@ -93,7 +93,6 @@ Se configuran en el panel → Ajustes → **Medios de pago** (cada uno se puede 
 | **Yape / Plin** | 0 | Se muestra monto exacto, número y titular (con botón copiar) y QR si hay imagen. El cliente paga y **sube el comprobante**. |
 | **Transferencia** | 0 | Banco, cuenta, CCI y titular (con botón copiar). Igual: **sube el comprobante**. |
 | **Tarjeta** | configurable (`card.surcharge`, 0 por defecto) | No hay pasarela en el sitio. El cliente pide su **link de pago por WhatsApp** (mensaje ya armado con el pedido) y Angie se lo envía. |
-| **Contra entrega** | 0 | Solo delivery en Lima. Paga en efectivo al recibir. |
 
 Si Yape o la transferencia no tienen datos cargados, el cliente ve «Te enviamos los datos de pago por WhatsApp» con un botón para pedirlos.
 
@@ -117,12 +116,12 @@ Todas las escrituras exigen la cabecera `X-Requested-With: mv-shop`.
 
 | Método | Parámetros | Función |
 |---|---|---|
-| `POST` | `{ name, phone, email?, items:[{id,opt,qty}], ship, address:{depto,prov,distrito,dir,ref}, pay, coupon?, doc?, notes?, website }` | Crea el pedido. Devuelve `{ code, token }`. |
+| `POST` | `{ name, phone, email?, items:[{id,opt,qty}], ship, address:{depto,prov,distrito,dir,ref}, pay, coupon?, doc?:{type:'boleta',dni}, notes?, website }` | Crea el pedido. Devuelve `{ code, token }`. |
 | `GET` | `?c=CÓDIGO&t=TOKEN` | Estado del pedido (`publicOrder`: sin teléfono, correo, DNI/RUC ni dirección). |
 | `POST` | `?op=coupon` `{ code, subtotal }` | Valida el cupón y devuelve su regla y descuento. |
 | `POST` | `?op=proof` `{ c, t, img }` | Sube el comprobante (data URL). |
 
-Validaciones del servidor: producto existente y con stock; cantidad 1–10 y ≤ stock; opción válida (talla/color); celular de 9 dígitos; dirección según la zona; medio de pago activo (contra entrega solo en Lima); DNI de 8 / RUC de 11 dígitos si pide comprobante; honeypot.
+Validaciones del servidor: producto existente y con stock; cantidad 1–10 y ≤ stock; opción válida (talla/color); celular de 9 dígitos; dirección según la zona; medio de pago activo; DNI de 8 dígitos si pide boleta; honeypot.
 
 ### Admin — `/api/orders-admin` (requiere sesión)
 

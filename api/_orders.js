@@ -81,7 +81,6 @@ export function buildOrder(store, b) {
   const method = String(b.pay || '');
   const pc = (config.pay || {})[method];
   if (!pc || !pc.on) throw new Fail('Elige un medio de pago');
-  if (method === 'cod' && ship !== 'lima') throw new Fail('El pago contra entrega es solo para delivery en Lima');
 
   /* cupón */
   let coupon = null;
@@ -113,7 +112,7 @@ export function buildOrder(store, b) {
     code, token: randomBytes(16).toString('hex'), createdAt: now, status: 'pending',
     history: [{ status: 'pending', at: now, note: 'Pedido creado' }],
     customer: { name, phone, email },
-    delivery: { ship, label: zone.l, eta: zone.s || '', address },
+    delivery: { ship, label: ship === 'pick' ? 'Recojo en tienda' : zone.l, eta: zone.s || '', address },
     items,
     totals: { regular, savings: r2(regular - sub), sub, coupon: coupon ? coupon.code : '', disc, ship: shipCost, freeShip: free, surchargePct: surPct, surcharge, total },
     pay: { method },

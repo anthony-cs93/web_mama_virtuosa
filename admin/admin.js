@@ -857,7 +857,6 @@ function renderSettings() {
       <div class="pay-set"><label class="chk-on"><input type="checkbox" data-bind="config.pay.card.on" data-bool${c.pay.card.on ? ' checked' : ''}> <b>Tarjeta (link de pago por WhatsApp)</b></label>
         <label class="fld" style="max-width:300px"><span>Recargo por pagar con tarjeta (%)</span><input type="number" min="0" max="15" step="0.1" data-bind="config.pay.card.surcharge" data-num value="${c.pay.card.surcharge}"></label>
         <p class="muted small" style="margin:0">El cliente confirma su pedido y tú le envías el link de pago (Izipay, Mercado Pago, etc.) por WhatsApp. Con 0 no se cobra recargo.</p></div>
-      <div class="pay-set"><label class="chk-on"><input type="checkbox" data-bind="config.pay.cod.on" data-bool${c.pay.cod.on ? ' checked' : ''}> <b>Pago contra entrega</b> <small>(solo delivery en Lima)</small></label></div>
     </div></div>
   <div class="card"><h2>Cupones</h2>
     <p class="muted small" style="margin:-6px 0 14px">Los cupones no se publican en la tienda: se validan en el servidor. El descuento se aplica solo a los productos, no al envío.</p>
@@ -1121,7 +1120,7 @@ async function heroVariants(file) {
    PEDIDOS (se guardan al instante, no usan «Guardar cambios»)
    ===================================================================== */
 const O_STATUS = { pending: 'Esperando pago', review: 'Comprobante por revisar', paid: 'Pagado', preparing: 'En preparación', ready: 'Listo / en camino', delivered: 'Entregado', cancelled: 'Cancelado' };
-const O_PAY = { yape: 'Yape / Plin', bank: 'Transferencia', card: 'Tarjeta (link)', cod: 'Contra entrega' };
+const O_PAY = { yape: 'Yape / Plin', bank: 'Transferencia', card: 'Tarjeta (link)' };
 const O_FILTERS = [
   ['open', 'Por atender', o => ['pending', 'review', 'paid', 'preparing', 'ready'].includes(o.status)],
   ['review', 'Por confirmar pago', o => o.status === 'review'],
@@ -1166,7 +1165,7 @@ function openOrder(code) {
   const o = ORD && ORD.find(x => x.code === code); if (!o) return;
   const t = o.totals, c = o.customer, d = o.delivery, a = d.address;
   const first = c.name.split(' ')[0];
-  const canPay = ['pending', 'review'].includes(o.status) && o.pay.method !== 'cod';
+  const canPay = ['pending', 'review'].includes(o.status);
   const line = (k, v) => v ? `<div class="o-kv"><span>${k}</span><b>${esc(v)}</b></div>` : '';
   odlg.innerHTML = `<div class="dlg-head"><h2 id="ord-t">${esc(o.code)} <span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">✕</button></div>
   <div class="dlg-body" data-code="${esc(o.code)}">

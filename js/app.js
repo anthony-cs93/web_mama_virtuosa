@@ -59,13 +59,14 @@ function addToCart(id, opt, qty) {
 const PAYCFG = C.pay || {};
 const PAY_META = {
   yape: { l: 'Yape / Plin', s: 'Pagas desde tu celular y subes la captura' },
-  bank: { l: 'Transferencia bancaria', s: 'Subes tu comprobante después de confirmar' },
-  card: { l: 'Tarjeta crédito / débito', s: 'Te enviamos un link de pago por WhatsApp' },
-  cod: { l: 'Pago contra entrega', s: 'Pagas al recibir · solo delivery en Lima' }
+  bank: { l: 'Transferencia bancaria (BCP)', s: 'Subes tu comprobante después de confirmar' },
+  card: { l: 'Tarjeta crédito / débito', s: 'Te enviamos un link de pago por WhatsApp' }
 };
+const PICKUP = { l: 'Recojo en tienda', addr: 'Jr. San José #389 - Comas', map: 'https://maps.app.goo.gl/4xzChrczx9wF9VSY9' };
+const mapLink = '<a href="' + PICKUP.map + '" target="_blank" rel="noopener">Ver ubicación en Google Maps</a>';
 const payKeys = () => Object.keys(PAY_META).filter(k => !PAYCFG[k] || PAYCFG[k].on !== false);
 const surchargePct = () => Number((PAYCFG.card && PAYCFG.card.surcharge) || 0);
-const PAY_SHORT = { yape: 'Yape', bank: 'transferencia', card: 'tarjeta', cod: 'pago contra entrega' };
+const PAY_SHORT = { yape: 'Yape', bank: 'transferencia', card: 'tarjeta' };
 const payNames = () => { const n = payKeys().map(k => PAY_SHORT[k]); if (payKeys().includes('yape')) n.splice(1, 0, 'Plin'); return n.join(', '); };
 
 function shipCost(sub, ship) {
@@ -109,7 +110,7 @@ async function applyCoupon(raw) {
 /* ---------- estado de interfaz ---------- */
 const ui = {
   pdp: { qty: 1, opt: null, img: 0 },
-  co: { ship: 'lima', pay: payKeys()[0] || 'yape', f: { ...store.get('mv_fields', {}) }, err: {}, agree: false, doc: false, docType: 'boleta', busy: false },
+  co: { ship: 'lima', pay: payKeys()[0] || 'yape', f: (() => { const f = { ...store.get('mv_fields', {}) }; if (!f.name && (f.nombres || f.apellidos)) f.name = `${f.nombres || ''} ${f.apellidos || ''}`.trim(); delete f.nombres; delete f.apellidos; return f; })(), err: {}, agree: false, doc: false, busy: false },
   couponMsg: null,
   playing: null, elapsed: {}, topic: 'Todos', mega: null
 };
@@ -412,8 +413,7 @@ function pageCart() { return { title: 'Tu carrito', html: cartView() }; }
 
 /* ---------- checkout (una sola página: datos, entrega y pago) ---------- */
 const FIELDS = {
-  nombres: { l: 'Nombres', ac: 'given-name' },
-  apellidos: { l: 'Apellidos', ac: 'family-name' },
+  name: { l: 'Nombres y apellidos', ac: 'name' },
   phone: { l: 'Celular (WhatsApp)', type: 'tel', ac: 'tel-national', test: v => /^\d{9}$/.test(v.replace(/\s/g, '')), msg: 'Ingresa un celular de 9 dígitos' },
   email: { l: 'Correo (opcional)', type: 'email', ac: 'email', opt: true, test: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), msg: 'Ingresa un correo válido' },
   depto: { l: 'Departamento', ac: 'address-level1' },
@@ -422,16 +422,13 @@ const FIELDS = {
   dir: { l: 'Dirección y número', ac: 'street-address' },
   ref: { l: 'Referencia (opcional)', opt: true },
   dni: { l: 'DNI', ac: 'off', test: v => /^\d{8}$/.test(v), msg: 'El DNI tiene 8 dígitos' },
-  ruc: { l: 'RUC', ac: 'off', test: v => /^\d{11}$/.test(v), msg: 'El RUC tiene 11 dígitos' },
-  razon: { l: 'Razón social', ac: 'organization' },
   notes: { l: 'Nota para tu pedido (opcional)', opt: true, area: true, max: 300 }
 };
 const applies = k => {
   const st = ui.co;
   if (k === 'depto' || k === 'prov') return st.ship === 'prov';
   if (k === 'distrito' || k === 'dir' || k === 'ref') return st.ship !== 'pick';
-  if (k === 'dni') return st.doc && st.docType === 'boleta';
-  if (k === 'ruc' || k === 'razon') return st.doc && st.docType === 'factura';
+  if (k === 'dni') return st.doc;
   return true;
 };
 const fieldError = k => {
@@ -441,8 +438,8 @@ const fieldError = k => {
 };
 const fld = (k, extra = '', label) => {
   const d = FIELDS[k], v = ui.co.f[k] || '', e = ui.co.err[k];
-  const attrs = `id="f-${k}" name="${k}" data-co="${k}" autocomplete="${d.ac || 'off'}"${e ? ' aria-invalid="true"' : ''} aria-describedby="e-${k}"`;
-  return `<div class="fld ${e ? 'err' : ''} ${extra}" data-fld="${k}"><label for="f-${k}">${label || d.l}</label>
+  const attrs = `id="f-${k}" name="${k}" data-co="${k}" autocomplete="${d.ac || 'off'}"${d.opt ? '' : ' aria-required="true"'}${e ? ' aria-invalid="true"' : ''} aria-describedby="e-${k}"`;
+  return `<div class="fld ${e ? 'err' : ''} ${extra}" data-fld="${k}"><label for="f-${k}">${label || d.l}${d.opt ? '' : '<span class="req" aria-hidden="true"> *</span>'}</label>
     ${d.area ? `<textarea ${attrs} rows="2" maxlength="${d.max}">${esc(v)}</textarea>` : `<input ${attrs} type="${d.type || 'text'}" value="${esc(v)}"${d.type === 'tel' ? ' inputmode="numeric"' : ''}>`}
     <div class="msg" id="e-${k}">${e ? esc(e) : ''}</div></div>`;
 };
@@ -466,8 +463,7 @@ function payNote(t) {
   const m = {
     yape: 'Al confirmar verás el número y el QR de Yape / Plin. Pagas desde tu celular y subes la captura para validar tu pago.',
     bank: 'Al confirmar verás los datos de la cuenta. Haces la transferencia y subes tu comprobante para validar tu pago.',
-    card: `Al confirmar te enviamos un link de pago seguro por WhatsApp.${pct > 0 ? ` Este medio tiene un recargo de ${pct}% (${fmt(t.sur)} en este pedido).` : ''}`,
-    cod: `Pagas ${fmt(t.total)} en efectivo al recibir tu pedido (solo delivery en Lima). Si necesitas vuelto, avísanos por WhatsApp.`
+    card: `Al confirmar te enviamos un link de pago seguro por WhatsApp.${pct > 0 ? ` Este medio tiene un recargo de ${pct}% (${fmt(t.sur)} en este pedido).` : ''}`
   };
   return `<div class="pay-note">${m[st.pay] || ''}</div>`;
 }
@@ -489,29 +485,27 @@ function summaryHTML(inner) {
 }
 function checkoutView() {
   const st = ui.co, t = totals(st.ship, st.pay);
-  const shipEntries = Object.keys(D.shipping).map(k => { const o = D.shipping[k], c = shipCost(t.sub, k); return { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : fmt(c) }; });
-  const payEntries = payKeys().map(k => ({ k, l: PAY_META[k].l, s: PAY_META[k].s, dis: k === 'cod' && st.ship !== 'lima', price: k === 'card' && surchargePct() > 0 ? '+' + surchargePct() + '%' : '' }));
+  const shipEntries = Object.keys(D.shipping).map(k => { const o = D.shipping[k], c = shipCost(t.sub, k); return k === 'pick' ? { k, l: PICKUP.l, s: PICKUP.addr, price: 'Gratis' } : { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : fmt(c) }; });
+  const payEntries = payKeys().map(k => ({ k, l: PAY_META[k].l, s: PAY_META[k].s, price: k === 'card' && surchargePct() > 0 ? '+' + surchargePct() + '%' : '' }));
   const mSum = `<details class="sum-m"><summary><span>Resumen del pedido (${t.count})</span><b>${fmt(t.total)} ⌄</b></summary><div class="in">${summaryHTML(true)}</div></details>`;
   return `<div class="co-page"><h1 class="sr">Finalizar compra</h1>
     <a class="link" href="#/carrito">← Volver al carrito</a>
     <div style="height:18px"></div>${mSum}
     <div class="co-grid"><form class="form" data-form="order" novalidate>
       <section class="co-card" aria-labelledby="h-datos"><h2 id="h-datos"><i>1</i>Tus datos</h2>
-        <div class="row2">${fld('nombres')}${fld('apellidos')}</div>
-        <div class="row2">${fld('phone')}${fld('email')}</div></section>
+        <p class="req-note">Los campos con <span class="req">*</span> son obligatorios.</p>
+        ${fld('name')}
+        <div class="row2">${fld('phone')}${fld('email')}</div>
+        <label class="chk-line"><input type="checkbox" data-co-check="doc"${st.doc ? ' checked' : ''}> Necesito boleta</label>
+        ${st.doc ? fld('dni') : ''}</section>
       <section class="co-card" aria-labelledby="h-entrega"><h2 id="h-entrega"><i>2</i>Entrega</h2>
         ${choiceHTML('ship', shipEntries, st.ship)}
-        ${st.ship === 'pick' ? '<div class="pay-note">Con recojo en punto no necesitas ingresar dirección. Te avisaremos por WhatsApp dónde y cuándo recoger.</div>' :
+        ${st.ship === 'pick' ? `<div class="pay-note">Recoge tu pedido en <b>${PICKUP.addr}</b>. ${mapLink}<br>No necesitas ingresar dirección; te avisaremos por WhatsApp cuando esté listo.</div>` :
           st.ship === 'prov' ? `<div class="row2">${fld('depto')}${fld('prov')}</div>${fld('distrito')}${fld('dir', '', 'Agencia y dirección de entrega')}${fld('ref')}` :
           `${fld('distrito')}${fld('dir')}${fld('ref')}`}</section>
       <section class="co-card" aria-labelledby="h-pago"><h2 id="h-pago"><i>3</i>Forma de pago</h2>
         ${choiceHTML('pay', payEntries, st.pay)}${payNote(t)}</section>
       <section class="co-card" aria-label="Detalles adicionales">
-        <label class="chk-line"><input type="checkbox" data-co-check="doc"${st.doc ? ' checked' : ''}> Necesito boleta o factura</label>
-        ${st.doc ? `<div class="seg" role="radiogroup" aria-label="Tipo de comprobante">
-          <label><input type="radio" name="docType" value="boleta" data-co-radio="docType"${st.docType === 'boleta' ? ' checked' : ''}><span>Boleta (DNI)</span></label>
-          <label><input type="radio" name="docType" value="factura" data-co-radio="docType"${st.docType === 'factura' ? ' checked' : ''}><span>Factura (RUC)</span></label></div>
-          ${st.docType === 'boleta' ? fld('dni') : `<div class="row2">${fld('ruc')}${fld('razon')}</div>`}` : ''}
         ${fld('notes')}
         <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
         <label class="chk-line"><input type="checkbox" data-co-check="agree" id="agree"${st.agree ? ' checked' : ''}> Acepto los términos, la política de privacidad y la política de cambios</label>
@@ -544,11 +538,11 @@ async function submitOrder(form) {
   $('#co-err').textContent = '';
   const f = st.f, g = k => (f[k] || '').trim();
   const body = {
-    name: `${g('nombres')} ${g('apellidos')}`, phone: g('phone').replace(/\s/g, ''), email: g('email'),
+    name: g('name'), phone: g('phone').replace(/\s/g, ''), email: g('email'),
     items: cart.map(l => ({ id: l.id, opt: l.opt, qty: l.qty })),
     ship: st.ship, address: { depto: g('depto'), prov: g('prov'), distrito: g('distrito'), dir: g('dir'), ref: g('ref') },
     pay: st.pay, coupon: coupon ? coupon.code : '',
-    doc: st.doc ? (st.docType === 'boleta' ? { type: 'boleta', dni: g('dni') } : { type: 'factura', ruc: g('ruc'), razon: g('razon') }) : null,
+    doc: st.doc ? { type: 'boleta', dni: g('dni') } : null,
     notes: g('notes'), website: form.elements.website.value
   };
   const total = totals(st.ship, st.pay).total;
@@ -558,7 +552,7 @@ async function submitOrder(form) {
     const mine = store.get('mv_orders', []).filter(o => o.code !== r.code);
     mine.unshift({ code: r.code, token: r.token, at: Date.now(), total });
     store.set('mv_orders', mine.slice(0, 20));
-    const keep = { ...f }; delete keep.notes; delete keep.dni; delete keep.ruc; delete keep.razon;
+    const keep = { ...f }; delete keep.notes; delete keep.dni;
     store.set('mv_fields', keep);
     try { sessionStorage.setItem('mv_fresh', r.code); } catch { /* sin almacenamiento */ }
     cart = []; coupon = null; ui.couponMsg = null; saveCart();
@@ -572,9 +566,9 @@ async function submitOrder(form) {
 
 /* ---------- pedido (seguimiento, instrucciones de pago y comprobante) ---------- */
 const ORDER_FLOW = ['pending', 'review', 'paid', 'preparing', 'ready', 'delivered'];
-const flowOf = o => o.pay.method === 'cod' ? ['pending', 'preparing', 'ready', 'delivered'] : o.pay.method === 'card' ? ['pending', 'paid', 'preparing', 'ready', 'delivered'] : ORDER_FLOW;
+const flowOf = o => o.pay.method === 'card' ? ['pending', 'paid', 'preparing', 'ready', 'delivered'] : ORDER_FLOW;
 const stepLabel = (o, s) => ({
-  pending: o.pay.method === 'cod' ? 'Pedido recibido' : 'Esperando pago', review: 'Comprobante en revisión', paid: 'Pago confirmado', preparing: 'En preparación',
+  pending: 'Esperando pago', review: 'Comprobante en revisión', paid: 'Pago confirmado', preparing: 'En preparación',
   ready: o.delivery.ship === 'pick' ? 'Listo para recoger' : 'En camino', delivered: 'Entregado', cancelled: 'Cancelado'
 })[s];
 const when = iso => new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -589,7 +583,6 @@ function payPanel(o) {
   const waAsk = txt => `<button class="btn wa" data-act="wa" data-msg="${esc(orderWa(o, txt))}">💬 ${m === 'card' ? 'Pedir mi link de pago' : 'Pedir los datos por WhatsApp'}</button>`;
   if (o.status === 'cancelled') return '';
   const paid = ORDER_FLOW.indexOf(o.status) >= 2;
-  if (m === 'cod') return `<section class="ord-card"><h2>Pago contra entrega</h2><p>Pagas <b>${tot}</b> en efectivo al recibir tu pedido. Si necesitas vuelto, avísanos por WhatsApp.</p></section>`;
   if (paid) return `<section class="ord-card ok"><h2>✓ Pago confirmado</h2><p>¡Gracias! Ya estamos preparando tu pedido.</p></section>`;
   if (m === 'card') return `<section class="ord-card"><h2>Pago con tarjeta</h2>
     <p>Total a pagar: <b>${tot}</b>${o.totals.surcharge ? ` (incluye recargo de ${fmt(o.totals.surcharge)})` : ''}. Te enviaremos un link de pago seguro por WhatsApp para que pagues con tu tarjeta.</p>
@@ -597,7 +590,7 @@ function payPanel(o) {
   const info = m === 'yape'
     ? (cfg.number || cfg.qr ? `${copyRow('Número', cfg.number)}${copyRow('Titular', cfg.holder)}${cfg.qr ? `<img class="qr" src="${esc(cfg.qr)}" alt="Código QR de Yape">` : ''}` : '')
     : (cfg.account || cfg.cci ? `${copyRow('Banco', cfg.bank)}${copyRow('Cuenta', cfg.account)}${copyRow('CCI', cfg.cci)}${copyRow('Titular', cfg.holder)}` : '');
-  return `<section class="ord-card"><h2>${m === 'yape' ? 'Paga con Yape o Plin' : 'Paga por transferencia'}</h2>
+  return `<section class="ord-card"><h2>${m === 'yape' ? 'Paga con Yape o Plin' : 'Paga por transferencia (BCP)'}</h2>
     <p>Monto exacto: <b class="amt">${tot}</b></p>
     ${info || `<p class="muted">Te enviamos los datos de pago por WhatsApp.</p>${waAsk('Quiero pagar, por favor envíame los datos de pago.')}`}
     ${o.status === 'review' && o.proof ? `<div class="proof-ok">✓ Recibimos tu comprobante el ${esc(when(o.proof.at))}. Lo estamos revisando; te avisaremos por WhatsApp.</div>` : ''}
@@ -621,7 +614,7 @@ function orderHTML(o, fresh) {
     <div class="ord-grid"><div class="ord-main">
       <section class="ord-card"><h2>Estado</h2>${trackHTML(o)}</section>
       ${payPanel(o)}
-      <section class="ord-card"><h2>Entrega</h2><p><b>${esc(d.label)}</b>${d.district ? ' · ' + esc(d.district) : ''}<br><span class="muted">${d.ship === 'pick' ? 'Te avisaremos por WhatsApp dónde recoger.' : 'Plazo estimado: ' + esc(d.eta) + ' desde la confirmación del pago.'}</span></p></section>
+      <section class="ord-card"><h2>Entrega</h2><p><b>${esc(d.ship === 'pick' ? PICKUP.l : d.label)}</b>${d.district ? ' · ' + esc(d.district) : ''}<br><span class="muted">${d.ship === 'pick' ? `Recoge en ${PICKUP.addr}. ${mapLink}<br>Te avisaremos por WhatsApp cuando esté listo.` : 'Plazo estimado: ' + esc(d.eta) + ' desde la confirmación del pago.'}</span></p></section>
     </div>
     <aside class="summary" aria-label="Resumen del pedido"><h2>Resumen</h2>
       ${o.items.map(i => `<div class="sum-line"><div class="ph${i.img ? ' has-img' : ''}">${i.img ? `<img src="${esc(i.img)}" alt="">` : ''}</div><div class="t"><b>${esc(i.name)}</b><br><span class="muted">${i.opt ? esc(i.opt) + ' · ' : ''}Cant. ${i.qty}</span></div><b>${fmt(i.price * i.qty)}</b></div>`).join('')}
@@ -886,7 +879,6 @@ const actions = {
   'line-rm'(el) { cart.splice(+el.dataset.i, 1); saveCart(); render(true); },
   'pick-ship'(el) {
     ui.co.ship = el.dataset.k;
-    if (ui.co.ship !== 'lima' && ui.co.pay === 'cod') ui.co.pay = payKeys().find(k => k !== 'cod') || 'yape';
     ui.co.err = {}; rerenderKeepFocus();
   },
   'pick-pay'(el) { if (ui.co.pay !== el.dataset.k) { ui.co.pay = el.dataset.k; rerenderKeepFocus(); } },
@@ -911,7 +903,7 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.co) {
     ui.co.f[t.dataset.co] = t.value;
-    if (!['notes', 'dni', 'ruc', 'razon'].includes(t.dataset.co)) store.set('mv_fields', Object.fromEntries(Object.entries(ui.co.f).filter(([k]) => !['notes', 'dni', 'ruc', 'razon'].includes(k))));
+    if (!['notes', 'dni'].includes(t.dataset.co)) store.set('mv_fields', Object.fromEntries(Object.entries(ui.co.f).filter(([k]) => !['notes', 'dni'].includes(k))));
     if (t.closest('[data-fld]').classList.contains('err') && !fieldError(t.dataset.co)) showErr(t.dataset.co, '');
   }
   if (t.dataset.f === 'min') { F.min = +t.value; if (F.min > F.max) { F.max = F.min; $('[data-f=max]').value = F.max; } updateGrid(); }
@@ -921,7 +913,7 @@ document.addEventListener('change', e => {
   const t = e.target, f = t.dataset.f;
   if (t.dataset.coCheck) {
     ui.co[t.dataset.coCheck] = t.checked;
-    if (t.dataset.coCheck === 'doc') { ui.co.err = {}; render(true); const n = $('#f-dni') || $('#f-ruc'); if (t.checked && n) n.focus(); }
+    if (t.dataset.coCheck === 'doc') { ui.co.err = {}; render(true); const n = $('#f-dni'); if (t.checked && n) n.focus(); else $('[data-co-check=doc]').focus(); }
     if (t.dataset.coCheck === 'agree' && t.checked) { const m = $('#e-agree'); if (m) { m.textContent = ''; m.parentElement.classList.remove('err'); } }
     return;
   }

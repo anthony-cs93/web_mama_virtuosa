@@ -37,9 +37,6 @@
       "card": {
         "on": true,
         "surcharge": 0
-      },
-      "cod": {
-        "on": true
       }
     }
   },
@@ -410,7 +407,7 @@
         "p": 15
       },
       "pick": {
-        "l": "Recojo en punto",
+        "l": "Recojo en tienda",
         "s": "Disponible en 24 h",
         "p": 0
       }
@@ -427,17 +424,13 @@
       "bank": {
         "l": "Transferencia bancaria",
         "s": "Envía el voucher por WhatsApp"
-      },
-      "cod": {
-        "l": "Pago contra entrega",
-        "s": "Solo Lima"
       }
     },
     "help": {
       "envios": {
         "title": "Envíos",
         "body": [
-          "Delivery en Lima: 2–4 días hábiles. Agencia a provincias: 4–7 días hábiles. Recojo en punto: disponible en 24 h.",
+          "Delivery en Lima: 2–4 días hábiles. Agencia a provincias: 4–7 días hábiles. Recojo en tienda (Jr. San José #389 - Comas): disponible en 24 h.",
           "Envío gratis en Lima en compras desde S/ 150."
         ]
       },

@@ -78,8 +78,7 @@ export function migrateFilters(store) {
 export const PAY_DEFAULTS = {
   yape: { on: true, number: '', holder: '', qr: '' },
   bank: { on: true, bank: 'BCP', account: '', cci: '', holder: '' },
-  card: { on: true, surcharge: 0 },
-  cod: { on: true }
+  card: { on: true, surcharge: 0 }
 };
 /* Cupones: { CÓDIGO: { type: 'pct' | 'amt', value, min, expires: 'AAAA-MM-DD' | '', active } }. El formato antiguo era { CÓDIGO: 0.1 } */
 export function normCoupons(src) {
