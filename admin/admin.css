@@ -206,3 +206,35 @@ dialog::backdrop{background:rgba(42,34,48,.5)}
 .hu-img{height:70px;width:auto;border-radius:8px;display:block}
 .swatches button.orig{border-radius:8px;width:44px}
 @media (max-width:560px){.hp{grid-template-columns:1fr}.hp-i{min-height:120px}}
+
+/* ventana de confirmación */
+dialog.cfm{width:min(420px,calc(100vw - 24px));border-radius:20px;overflow:visible}
+.cfm-box{padding:28px 26px 22px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.cfm-ico{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:var(--lav);color:var(--plum);margin-bottom:2px}
+.cfm-ico.danger{background:#fde4e2;color:var(--red)}
+.cfm-ico svg{width:26px;height:26px}
+.cfm-box h2{margin:0;font-size:20px}
+.cfm-box p{margin:0;color:var(--muted);line-height:1.55;font-size:15px}
+.cfm-box p b{color:var(--ink);overflow-wrap:anywhere}
+.cfm-in{width:100%;text-align:left;margin-top:6px}
+.cfm-box .form-err{min-height:0;width:100%;text-align:left}
+.cfm-actions{display:flex;gap:10px;margin-top:12px;width:100%}
+.cfm-actions .btn{flex:1;justify-content:center}
+dialog.cfm[open]{animation:cfm-in .16s ease-out}
+@keyframes cfm-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){dialog.cfm[open]{animation:none}}
+@media (max-width:420px){.cfm-actions{flex-direction:column-reverse}}
+
+/* beneficios */
+#goals-card .row{background:#fff}
+.check.small{font-size:13px;font-weight:600;color:var(--muted)}
+
+/* categorías: secciones claras */
+.sub-h{margin:10px 0 -2px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);border-top:1px solid var(--line);padding-top:14px}
+.sub-h:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.fbox{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.fbox p{margin:0}
+.fbox .rows .row{background:var(--cream)}
+.g-add-row{display:flex;gap:8px;flex-wrap:wrap}
+.g-add-row input{flex:1;min-width:220px;max-width:380px}
+.fld>small:first-of-type{order:0}

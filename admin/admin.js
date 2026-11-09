@@ -18,6 +18,51 @@ function toast(msg, bad) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), bad ? 4500 : 2500);
 }
 
+
+/* ---------- ventana de confirmación (reemplaza a confirm()) ---------- */
+const cfm = $('#cfm');
+const CFM_ICONS = {
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+  out: '<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  warn: '<path d="M12 4l9 16H3L12 4zM12 10v4M12 17v.5"/>'
+};
+/* ask({ title, message (HTML ya escapado), confirmText, cancelText (null = solo informar), danger, icon, input })
+   Sin input devuelve true/false; con input devuelve el texto escrito o null. */
+function ask({ title, message = '', confirmText = 'Aceptar', cancelText = 'Cancelar', danger = false, icon = 'info', input = null }) {
+  return new Promise(resolve => {
+    cfm.innerHTML = `<form method="dialog" class="cfm-box" novalidate>
+      <div class="cfm-ico${danger ? ' danger' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${CFM_ICONS[icon] || CFM_ICONS.info}</svg></div>
+      <h2 id="cfm-t">${esc(title)}</h2>
+      ${message ? `<p id="cfm-m">${message}</p>` : ''}
+      ${input ? `<label class="fld cfm-in"><span>${esc(input.label)}</span><input type="text" id="cfm-in" value="${esc(input.value)}" maxlength="${input.max || 80}"></label><div class="form-err" id="cfm-err" role="alert"></div>` : ''}
+      <div class="cfm-actions">${cancelText ? `<button type="button" class="btn ghost" data-no>${esc(cancelText)}</button>` : ''}<button type="submit" class="btn${danger ? ' danger' : ''}" id="cfm-ok">${esc(confirmText)}</button></div>
+    </form>`;
+    cfm.setAttribute('aria-labelledby', 'cfm-t');
+    if (message) cfm.setAttribute('aria-describedby', 'cfm-m'); else cfm.removeAttribute('aria-describedby');
+    const none = input ? null : false;
+    let done = false;
+    const finish = v => { if (done) return; done = true; resolve(v); };
+    const f = $('form', cfm);
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      if (input) {
+        const v = $('#cfm-in').value.trim();
+        if (!v) { $('#cfm-err').textContent = 'Escribe un nombre.'; $('#cfm-in').focus(); return; }
+        cfm.close(); finish(v);
+      } else { cfm.close(); finish(true); }
+    });
+    const no = $('[data-no]', cfm); if (no) no.addEventListener('click', () => { cfm.close(); finish(none); });
+    cfm.addEventListener('close', () => finish(none), { once: true });
+    cfm.showModal();
+    // En acciones destructivas el foco empieza en «Cancelar», para evitar borrados por accidente
+    const first = input ? $('#cfm-in') : (danger && no ? no : $('#cfm-ok'));
+    first.focus(); if (input) first.select();
+  });
+}
+cfm.addEventListener('click', e => { if (e.target === cfm) cfm.close(); });
+
 async function api(method, url, body) {
   const r = await fetch(url, {
     method, credentials: 'same-origin',
@@ -50,6 +95,13 @@ function normalize() {
   const d = D();
   d.featured = d.featured || [];
   d.heroes = d.heroes || [];
+  d.catFilter = d.catFilter || {};
+  d.catGoals = d.catGoals || {};
+  if (d.goals && d.goals.length) {   // datos antiguos: una lista global → pasa a las categorías que la usaban
+    d.catOrder.forEach(c => { if ((d.catFilter[c] || {}).goals && !d.catGoals[c]) d.catGoals[c] = [...d.goals]; });
+  }
+  delete d.goals;
+  Object.values(d.catFilter).forEach(f => { if (f) delete f.goals; });
   d.hero = { ...clone(DEFAULT_HERO), ...(d.hero || {}) };
   flagged.clear(); d.featured.forEach(id => flagged.add(id));
   d.episodes.forEach(e => { if (e.date === undefined) e.date = (e.meta || '').split(' · ')[1] || ''; });
@@ -69,6 +121,9 @@ function payload() {
     if (p.imgs && p.imgs.length) p.img = p.imgs[0]; else { delete p.img; delete p.imgs; }
     if (!p.opt) delete p.opt;
   });
+  Object.keys(d.catFilter).forEach(k => { const f = d.catFilter[k]; if (!d.catOrder.includes(k) || !f || (!f.label && !(f.options && f.options.length))) delete d.catFilter[k]; });
+  Object.keys(d.catGoals).forEach(k => { if (!d.catOrder.includes(k) || !(d.catGoals[k] || []).length) delete d.catGoals[k]; });
+  d.products.forEach(p => { const list = d.catGoals[p.cat] || []; p.goals = (p.goals || []).filter(g => list.includes(g)); if (!p.goals.length) delete p.goals; });
   d.heroes.forEach(h => { if (!h.cta1) delete h.cta1; if (!h.cta2) delete h.cta2; });
   if (!d.hero.cta1) delete d.hero.cta1;
   if (!d.hero.cta2) delete d.hero.cta2;
@@ -123,7 +178,7 @@ $('#login-form').addEventListener('submit', async e => {
   loginBusy(false);
 });
 $('#logout').addEventListener('click', async () => {
-  if (dirty && !confirm('Tienes cambios sin guardar. ¿Salir de todos modos?')) return;
+  if (dirty && !await ask({ title: '¿Salir sin guardar?', message: 'Tienes cambios sin guardar. Si sales ahora, <b>se perderán</b>.', confirmText: 'Salir sin guardar', cancelText: 'Seguir editando', danger: true, icon: 'out' })) return;
   dirty = false;
   try { await api('POST', '/api/logout', {}); } catch { /* ya cerrada */ }
   location.reload();
@@ -266,26 +321,39 @@ view.addEventListener('click', e => {
     if (act === 'p-up') moveVisible(i, i - 1);
     if (act === 'p-down') moveVisible(i, i + 1);
     if (act === 'p-dup') {
-      const c = clone(p); c.id = nextId(); c.name += ' (copia)';
-      D().products.splice(D().products.indexOf(p) + 1, 0, c); markDirty(); renderProducts(); toast('Producto duplicado');
+      ask({ title: 'Duplicar producto', message: `Se creará una copia de <b>${esc(p.name)}</b>, con sus fotos y datos, justo debajo.`, confirmText: 'Duplicar', icon: 'copy', input: { label: 'Nombre de la copia', value: p.name + ' (copia)' } }).then(name => {
+        if (!name) return;
+        const c = clone(p); c.id = nextId(); c.name = name;
+        D().products.splice(D().products.indexOf(p) + 1, 0, c); markDirty(); renderProducts(); toast('Producto duplicado');
+      });
     }
-    if (act === 'p-del' && confirm(`¿Eliminar «${p.name}»? Dejará de mostrarse en la tienda.`)) {
-      D().products = D().products.filter(x => x !== p); flagged.delete(p.id);
-      Object.values(D().mega).forEach(m => { if (m.promo && m.promo.id === p.id) m.promo = null; });
-      D().episodes.forEach(ep => { if (ep.prod === p.id) delete ep.prod; });
-      markDirty(); renderProducts();
+    if (act === 'p-del') {
+      const d = D(), where = [];
+      if (flagged.has(p.id)) where.push('«Más vendidos» del inicio');
+      if (Object.values(d.mega).some(m => m.promo && m.promo.id === p.id)) where.push('el destacado de un menú');
+      const eps = d.episodes.filter(ep => ep.prod === p.id).length;
+      if (eps) where.push(`${eps} episodio${eps === 1 ? '' : 's'} del podcast`);
+      ask({ title: '¿Eliminar producto?', message: `<b>${esc(p.name)}</b> dejará de mostrarse en la tienda.${where.length ? `<br>También se quitará de: ${where.join(', ')}.` : ''}<br>Esta acción se aplica al guardar los cambios.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
+        if (!ok) return;
+        d.products = d.products.filter(x => x !== p); flagged.delete(p.id);
+        Object.values(d.mega).forEach(m => { if (m.promo && m.promo.id === p.id) m.promo = null; });
+        d.episodes.forEach(ep => { if (ep.prod === p.id) delete ep.prod; });
+        markDirty(); renderProducts();
+      });
     }
     return;
   }
   if (act.startsWith('c-')) return catClick(b, act);
+  if (act.startsWith('g-')) return goalClick(b, act);
   if (act.startsWith('e-')) return podClick(b, act);
   if (act.startsWith('s-')) return setClick(b, act);
   if (act.startsWith('h-')) return heroClick(b, act);
 });
 
+const goalsOf = cat => (D().catGoals || {})[cat] || [];
+/* Sugerencias de subcategoría: las opciones del filtro de la categoría + las que ya usan sus productos */
 function subOptions(cat) {
-  const set = new Set();
-  const m = D().mega[cat]; if (m) m.cols.forEach(c => c.l.forEach(l => set.add(l)));
+  const set = new Set(((D().catFilter || {})[cat] || {}).options || []);
   D().products.filter(p => p.cat === cat).forEach(p => p.sub && set.add(p.sub));
   return [...set];
 }
@@ -302,8 +370,8 @@ function productDialog(p) {
     <div class="dlg-body">
       <label class="fld"><span>Nombre *</span><input type="text" name="name" value="${esc(draft.name)}" required maxlength="80"></label>
       <div class="grid2">
-        <label class="fld"><span>Categoría *</span><select name="cat">${d.catOrder.map(c => `<option${c === draft.cat ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
-        <label class="fld"><span>Subcategoría</span><input type="text" name="sub" list="subs" value="${esc(draft.sub)}" maxlength="40"><datalist id="subs"></datalist></label>
+        <label class="fld"><span>Categoría *</span><small>La sección de la tienda donde aparece.</small><select name="cat">${d.catOrder.map(c => `<option${c === draft.cat ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+        <div class="fld" id="sub-fld"></div>
       </div>
       <div class="grid4">
         <label class="fld"><span>Precio (S/) *</span><input type="number" name="price" min="0" step="0.10" value="${draft.price}" required></label>
@@ -317,6 +385,7 @@ function productDialog(p) {
         <input type="hidden" name="tone" value="${esc(draft.tone)}"></div>
       <div class="fld"><span>Edad del niño (opcional)</span>
         <div class="chips">${AGES.map(a => `<label><input type="checkbox" name="ages" value="${a}"${draft.ages.includes(a) ? ' checked' : ''}><span>${a} años</span></label>`).join('')}</div></div>
+      <div class="fld" id="goals-fld" hidden><span>Por beneficio <small>(puedes marcar varios · solo en categorías que tengan este filtro)</small></span><div class="chips" id="goals-chips"></div></div>
       <div class="grid2">
         <label class="fld"><span>Opción (ej. Talla, Color)</span><input type="text" name="optLabel" value="${esc(draft.opt ? draft.opt.label : '')}" maxlength="20"></label>
         <label class="fld"><span>Valores, separados por coma</span><input type="text" name="optValues" value="${esc(draft.opt ? draft.opt.values.join(', ') : '')}" placeholder="0–6m, 6–12m, 1–2a"></label>
@@ -329,10 +398,36 @@ function productDialog(p) {
     </div>
     <div class="dlg-foot"><span></span><div class="r"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn">${isNew ? 'Agregar producto' : 'Aplicar'}</button></div></div>
   </form>`;
-  const f = $('#pf'), fill = () => {
-    $('#subs').innerHTML = subOptions(f.cat.value).map(s => `<option>${esc(s)}</option>`).join('');
+  const f = $('#pf');
+  /* Campo de subcategoría: usa el nombre y las opciones que se configuraron en Categorías → Filtro de subcategorías */
+  let subVal = draft.sub || '';
+  const drawSub = () => {
+    const cat = f.cat.value, cf = (D().catFilter || {})[cat] || {}, opts = cf.options || [], label = cf.label || 'Subcategoría';
+    const box = $('#sub-fld');
+    if (opts.length) {
+      const extra = subVal && !opts.includes(subVal) ? [subVal] : [];
+      box.innerHTML = `<span>${esc(label)}</span><small>Una sola opción. Las opciones se configuran en Categorías → ${esc(cat)} → Filtro de subcategorías.</small>
+        <select name="sub"><option value="">Ninguna</option>${[...opts, ...extra].map(o => `<option value="${esc(o)}"${o === subVal ? ' selected' : ''}>${esc(o)}${extra.includes(o) ? ' (ya no está en las opciones)' : ''}</option>`).join('')}</select>`;
+      $('select', box).addEventListener('change', e => { subVal = e.target.value; });
+    } else {
+      box.innerHTML = `<span>${esc(label)}</span><small>Una sola. Para elegirla de una lista, escribe las opciones en Categorías → ${esc(cat)} → Filtro de subcategorías.</small>
+        <input type="text" name="sub" list="subs" value="${esc(subVal)}" maxlength="40"><datalist id="subs">${subOptions(cat).map(o => `<option>${esc(o)}</option>`).join('')}</datalist>`;
+      $('input', box).addEventListener('input', e => { subVal = e.target.value; });
+    }
   };
-  fill(); f.cat.addEventListener('change', fill);
+  drawSub();
+  f.cat.addEventListener('change', () => {
+    if (subVal && !subOptions(f.cat.value).includes(subVal)) subVal = '';   // la subcategoría anterior no existe en la nueva categoría
+    drawSub();
+  });
+  const selGoals = new Set(draft.goals || []);
+  const drawGoals = () => {
+    const list = goalsOf(f.cat.value);
+    $('#goals-fld').hidden = !list.length;
+    $('#goals-chips').innerHTML = list.map(g => `<label><input type="checkbox" name="goals" value="${esc(g)}"${selGoals.has(g) ? ' checked' : ''}><span>${esc(g)}</span></label>`).join('');
+  };
+  drawGoals(); f.cat.addEventListener('change', drawGoals);
+  $('#goals-chips').addEventListener('change', e => { e.target.checked ? selGoals.add(e.target.value) : selGoals.delete(e.target.value); });
 
   const setTone = t => { f.tone.value = t; $$('#tone-sw button').forEach(b => b.setAttribute('aria-pressed', b.dataset.tone === t)); };
   $('#tone-sw').addEventListener('click', e => { const b = e.target.closest('[data-tone]'); if (b) setTone(b.dataset.tone); });
@@ -384,7 +479,7 @@ function productDialog(p) {
       ...(isNew ? {} : p),
       id: isNew ? nextId() : p.id, name, cat: v.get('cat'), sub: v.get('sub').trim(),
       price: Math.round(price * 100) / 100, old: Math.round(old * 100) / 100, tag: v.get('tag').trim(), tone: v.get('tone'),
-      stock: Number.isNaN(stock) ? 0 : Math.max(0, stock), ages: v.getAll('ages'),
+      stock: Number.isNaN(stock) ? 0 : Math.max(0, stock), ages: v.getAll('ages'), goals: goalsOf(v.get('cat')).filter(g => selGoals.has(g)),
       desc: v.get('desc').trim(), care: v.get('care').trim(), imgs: draft.imgs
     };
     if (optValues.length) out.opt = { label: optLabel, values: optValues }; else delete out.opt;
@@ -404,13 +499,14 @@ function renderCats() {
   const d = D();
   view.innerHTML = `
   <div class="sec-head"><div><h1>Categorías</h1>
-    <p class="muted">Aparecen en el menú, en el inicio y como filtro. El orden de aquí es el de la tienda.</p></div>
+    <p class="muted">Aparecen en el menú, en el inicio y como filtro. El orden de aquí es el de la tienda. Abre una categoría para editar sus datos, sus filtros y su menú.</p></div>
     <button class="btn" data-act="c-new">+ Nueva categoría</button></div>
   ${d.catOrder.map((c, i) => {
-    const m = d.mega[c], n = d.products.filter(p => p.cat === c).length;
+    const m = d.mega[c], n = d.products.filter(p => p.cat === c).length, cf = d.catFilter[c] || {}, gl = d.catGoals[c] || [];
     return `<details class="card" data-ci="${i}">
     <summary><span class="sw" style="background:${esc(d.catTone[c])}"></span><b>${esc(c)}</b><span class="muted small">${n} producto${n === 1 ? '' : 's'}</span></summary>
     <div class="stack">
+      <h3 class="sub-h">1 · Datos de la categoría</h3>
       <div class="grid3">
         <label class="fld"><span>Nombre</span><input type="text" data-cf="name" value="${esc(c)}" maxlength="40"></label>
         <label class="fld"><span>Nombre corto</span><input type="text" data-cf="short" value="${esc(d.catShort[c] || '')}" maxlength="20"><small>Para espacios pequeños</small></label>
@@ -418,13 +514,35 @@ function renderCats() {
       </div>
       <div class="fld"><span>Color de la tarjeta</span><div class="swatches">${TONES.map(t => `<button type="button" style="background:${t}" data-act="c-tone" data-t="${t}" aria-label="Color ${t}" aria-pressed="${t === d.catTone[c]}"></button>`).join('')}
         <input type="color" data-cf="tone" value="${/^#[0-9a-f]{6}$/i.test(d.catTone[c]) ? d.catTone[c] : '#fdd9ea'}" aria-label="Otro color"></div></div>
-      <div class="fld"><span>Columnas del menú desplegable</span>
+
+      <h3 class="sub-h">2 · Filtros en la tienda</h3>
+      <div class="fbox"><b>Filtro de subcategorías</b>
+        <p class="muted small">Cada producto tiene <u>una sola</u> subcategoría (ej.: Brochas, Adultos, Niños). Aquí eliges cómo se llama este filtro y qué opciones muestra.</p>
+        <div class="grid2">
+          <label class="fld"><span>Nombre del filtro</span><input type="text" data-cf="fLabel" value="${esc(cf.label || '')}" placeholder="Subcategoría" maxlength="30"><small>Ej.: «Por edad».</small></label>
+          <label class="fld"><span>Opciones (separadas por coma)</span><input type="text" data-cf="fOpts" value="${esc((cf.options || []).join(', '))}" placeholder="Todas las subcategorías" maxlength="120"><small>Ej.: Adultos, Niños. Vacío = muestra todas las que existan.</small></label>
+        </div></div>
+      <div class="fbox"><b>Filtro «Por beneficio» <span class="muted small">· opcional</span></b>
+        <p class="muted small">Cada producto puede tener <u>varios</u> beneficios (ej.: Sueño, Digestión). Si no agregas ninguno, este filtro no aparece en <b>${esc(c)}</b>.</p>
+        <div class="rows">${gl.map((g, k) => { const cnt = d.products.filter(p => p.cat === c && (p.goals || []).includes(g)).length; return `
+          <div class="row" data-gi="${k}">
+            <input type="text" data-gf="name" value="${esc(g)}" maxlength="40" aria-label="Nombre del beneficio" style="flex:1;min-width:160px">
+            <span class="muted small" style="min-width:100px">${cnt} producto${cnt === 1 ? '' : 's'}</span>
+            <div class="acts">
+              <button type="button" class="icon-btn" data-act="g-up" aria-label="Subir"${k === 0 ? ' disabled' : ''}>↑</button>
+              <button type="button" class="icon-btn" data-act="g-down" aria-label="Bajar"${k === gl.length - 1 ? ' disabled' : ''}>↓</button>
+              <button type="button" class="icon-btn" data-act="g-del" aria-label="Eliminar">🗑</button></div></div>`; }).join('')}</div>
+        <div class="g-add-row"><input type="text" class="g-new" placeholder="Nuevo beneficio (ej. Sueño y relajación)" maxlength="40"><button type="button" class="btn sm" data-act="g-add">+ Agregar</button></div></div>
+
+      <h3 class="sub-h">3 · Menú desplegable</h3>
+      <div class="fld"><span>Columnas</span>
         <div class="cols-ed">${m.cols.map((col, k) => `<div class="col-box" data-k="${k}">
           <input type="text" data-cf="colT" value="${esc(col.t)}" placeholder="Título (ej. Cabello)" aria-label="Título de la columna">
-          <input type="text" data-cf="colL" value="${esc(col.l.join(', '))}" placeholder="Brochas, Peines, Lazos" aria-label="Subcategorías, separadas por coma">
+          <input type="text" data-cf="colL" value="${esc(col.l.join(', '))}" placeholder="Brochas, Peines, Lazos" aria-label="Enlaces de la columna, separados por coma">
+          <label class="check small"><input type="checkbox" data-cf="colK"${col.kind === 'goal' ? ' checked' : ''}> Estos enlaces son beneficios</label>
           <button type="button" class="link red" data-act="c-colrm" data-k="${k}">Quitar columna</button></div>`).join('')}</div>
         ${m.cols.length < 4 ? '<div><button type="button" class="link" data-act="c-coladd">+ Agregar columna</button></div>' : ''}
-        <small>Las subcategorías de las columnas son los enlaces del menú. Un producto aparece ahí si su subcategoría tiene el mismo nombre.</small></div>
+        <small>Cada enlace del menú lleva a los productos con esa subcategoría (o con ese beneficio, si marcas la casilla).</small></div>
       <div class="grid2">
         <label class="fld"><span>Producto destacado del menú</span><select data-cf="promoId"><option value="">Ninguno</option>
           ${d.products.map(p => `<option value="${p.id}"${m.promo && m.promo.id === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
@@ -437,6 +555,47 @@ function renderCats() {
     </div></details>`;
   }).join('')}`;
   const open = renderCats.open; if (open != null) { const el = $(`details[data-ci="${open}"]`); if (el) el.open = true; }
+}
+
+/* Beneficios: cada categoría tiene su propia lista (d.catGoals[categoría]) */
+view.addEventListener('keydown', e => { if (e.target.classList && e.target.classList.contains('g-new') && e.key === 'Enter') { e.preventDefault(); goalClick(e.target, 'g-add'); } });
+function goalCtx(el) {
+  const d = D(), card = el.closest('details[data-ci]'), ci = +card.dataset.ci, c = d.catOrder[ci];
+  d.catGoals[c] = d.catGoals[c] || [];
+  return { d, card, ci, c, list: d.catGoals[c] };
+}
+function goalClick(b, act) {
+  const { d, card, ci, c, list } = goalCtx(b);
+  renderCats.open = ci;
+  if (act === 'g-add') {
+    const inp = $('.g-new', card), n = inp.value.trim();
+    if (!n) { inp.focus(); return; }
+    if (list.some(g => g.toLowerCase() === n.toLowerCase())) { toast('Ese beneficio ya existe en esta categoría', true); return; }
+    list.push(n); markDirty(); renderCats(); $(`details[data-ci="${ci}"] .g-new`).focus(); return;
+  }
+  const i = +b.closest('.row').dataset.gi, g = list[i];
+  if (act === 'g-up' && i > 0) { moveIn(list, i, i - 1); markDirty(); renderCats(); }
+  if (act === 'g-down' && i < list.length - 1) { moveIn(list, i, i + 1); markDirty(); renderCats(); }
+  if (act === 'g-del') {
+    const n = d.products.filter(p => p.cat === c && (p.goals || []).includes(g)).length;
+    ask({ title: '¿Eliminar beneficio?', message: `Se quitará <b>${esc(g)}</b> del filtro de ${esc(c)}${n ? ` y de ${n} producto${n === 1 ? '' : 's'}` : ''}.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
+      if (!ok) return;
+      list.splice(list.indexOf(g), 1);
+      d.products.forEach(p => { if (p.cat === c && p.goals) p.goals = p.goals.filter(x => x !== g); });
+      d.mega[c].cols.forEach(col => { if (col.kind === 'goal') col.l = col.l.filter(x => x !== g); });
+      markDirty(); renderCats();
+    });
+  }
+}
+function goalRename(t) {
+  const { d, ci, c, list } = goalCtx(t), i = +t.closest('.row').dataset.gi, old = list[i], n = t.value.trim();
+  if (!n) { t.value = old; return; }
+  if (n === old) return;
+  if (list.some((g, k) => k !== i && g.toLowerCase() === n.toLowerCase())) { toast('Ya existe un beneficio con ese nombre', true); t.value = old; return; }
+  list[i] = n;
+  d.products.forEach(p => { if (p.cat === c && p.goals) p.goals = p.goals.map(x => (x === old ? n : x)); });
+  d.mega[c].cols.forEach(col => { if (col.kind === 'goal') col.l = col.l.map(x => (x === old ? n : x)); });
+  renderCats.open = ci; markDirty(); renderCats();
 }
 function catClick(b, act) {
   const d = D();
@@ -456,9 +615,16 @@ function catClick(b, act) {
   if (act === 'c-down' && i < d.catOrder.length - 1) { moveIn(d.catOrder, i, i + 1); renderCats.open = i + 1; }
   if (act === 'c-del') {
     const n = d.products.filter(p => p.cat === c).length;
-    if (n) { toast(`No se puede eliminar: tiene ${n} producto${n === 1 ? '' : 's'}. Muévelos o elimínalos primero.`, true); return; }
-    if (!confirm(`¿Eliminar la categoría «${c}»?`)) return;
-    d.catOrder.splice(i, 1); [d.catSub, d.catTone, d.catShort, d.mega].forEach(o => delete o[c]); renderCats.open = null;
+    if (n) {
+      ask({ title: 'No se puede eliminar', message: `La categoría <b>${esc(c)}</b> tiene ${n} producto${n === 1 ? '' : 's'}. Muévelos a otra categoría o elimínalos primero.`, confirmText: 'Entendido', cancelText: null, icon: 'warn' });
+      return;
+    }
+    ask({ title: '¿Eliminar categoría?', message: `Se eliminará <b>${esc(c)}</b> del menú y del inicio.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => {
+      if (!ok) return;
+      d.catOrder.splice(d.catOrder.indexOf(c), 1); [d.catSub, d.catTone, d.catShort, d.mega, d.catFilter, d.catGoals].forEach(o => delete o[c]); renderCats.open = null;
+      markDirty(); renderCats();
+    });
+    return;
   }
   markDirty(); renderCats();
 }
@@ -472,12 +638,18 @@ view.addEventListener('input', e => {
   if (f === 'colT') d.mega[c].cols[+t.closest('.col-box').dataset.k].t = t.value;
   if (f === 'colL') d.mega[c].cols[+t.closest('.col-box').dataset.k].l = t.value.split(',').map(s => s.trim()).filter(Boolean);
   if (f === 'promoS') { d.mega[c].promo = d.mega[c].promo || { s: '', id: null }; d.mega[c].promo.s = t.value; }
+  if (f === 'fLabel' || f === 'fOpts') {
+    const cur = d.catFilter[c] = d.catFilter[c] || { label: '', options: [] };
+    if (f === 'fLabel') cur.label = t.value.trim(); else cur.options = t.value.split(',').map(x => x.trim()).filter(Boolean);
+  }
   markDirty();
 });
 view.addEventListener('change', e => {
   const t = e.target, f = t.dataset.cf, card = t.closest('details[data-ci]');
+  if (t.dataset.gf === 'name') return goalRename(t);
   if (!card) return;
   const d = D(), i = +card.dataset.ci, c = d.catOrder[i];
+  if (f === 'colK') { const col = d.mega[c].cols[+t.closest('.col-box').dataset.k]; if (t.checked) col.kind = 'goal'; else delete col.kind; markDirty(); return; }
   if (f === 'promoId') {
     const id = +t.value; const m = d.mega[c];
     if (!id) m.promo = null; else {
@@ -492,7 +664,7 @@ view.addEventListener('change', e => {
     if (n === c) return;
     if (d.catOrder.includes(n)) { toast('Ya existe una categoría con ese nombre', true); t.value = c; return; }
     d.catOrder[i] = n;
-    [d.catSub, d.catTone, d.catShort, d.mega].forEach(o => { o[n] = o[c]; delete o[c]; });
+    [d.catSub, d.catTone, d.catShort, d.mega, d.catFilter, d.catGoals].forEach(o => { if (o[c] !== undefined) o[n] = o[c]; delete o[c]; });
     d.products.forEach(p => { if (p.cat === c) p.cat = n; });
     if (filter.cat === c) filter.cat = n;
     markDirty(); renderCats.open = i; renderCats();
@@ -541,7 +713,7 @@ function podClick(b, act) {
   if (act === 'e-edit') episodeDialog(e);
   if (act === 'e-up' && i > 0) { moveIn(d.episodes, i, i - 1); markDirty(); renderPodcast(); }
   if (act === 'e-down' && i < d.episodes.length - 1) { moveIn(d.episodes, i, i + 1); markDirty(); renderPodcast(); }
-  if (act === 'e-del' && confirm(`¿Eliminar «${e.t}»?`)) { d.episodes.splice(i, 1); markDirty(); renderPodcast(); }
+  if (act === 'e-del') ask({ title: '¿Eliminar episodio?', message: `Se quitará <b>${esc(e.t)}</b> de la página del podcast.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => { if (!ok) return; d.episodes.splice(d.episodes.indexOf(e), 1); markDirty(); renderPodcast(); });
 }
 function episodeDialog(e) {
   const isNew = !e, d = D();
@@ -729,8 +901,8 @@ function heroClick(b, act) {
   if (act === 'h-toggle') { h.active = h.active === false; markDirty(); renderHero(); }
   if (act === 'h-up' && i > 0) { moveIn(d.heroes, i, i - 1); markDirty(); renderHero(); }
   if (act === 'h-down' && i < d.heroes.length - 1) { moveIn(d.heroes, i, i + 1); markDirty(); renderHero(); }
-  if (act === 'h-dup') { const c = clone(h); c.name += ' (copia)'; c.active = false; d.heroes.splice(i + 1, 0, c); markDirty(); renderHero(); toast('Campaña duplicada (queda pausada)'); }
-  if (act === 'h-del' && confirm(`¿Eliminar la campaña «${h.name}»?`)) { d.heroes.splice(i, 1); markDirty(); renderHero(); }
+  if (act === 'h-dup') ask({ title: 'Duplicar campaña', message: `Se creará una copia de <b>${esc(h.name)}</b>. Quedará <b>pausada</b> para que ajustes fechas y textos antes de activarla.`, confirmText: 'Duplicar', icon: 'copy', input: { label: 'Nombre de la copia', value: h.name + ' (copia)', max: 60 } }).then(name => { if (!name) return; const c = clone(h); c.name = name; c.active = false; d.heroes.splice(d.heroes.indexOf(h) + 1, 0, c); markDirty(); renderHero(); toast('Campaña duplicada (queda pausada)'); });
+  if (act === 'h-del') ask({ title: '¿Eliminar campaña?', message: `Se eliminará <b>${esc(h.name)}</b>. Si estaba en vivo, la tienda volverá a la portada por defecto.`, confirmText: 'Eliminar', danger: true, icon: 'trash' }).then(ok => { if (!ok) return; d.heroes.splice(d.heroes.indexOf(h), 1); markDirty(); renderHero(); });
 }
 
 /* Lista de destinos para los botones */

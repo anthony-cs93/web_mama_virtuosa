@@ -65,7 +65,7 @@ const imgOrLabel = (p, label) => pics(p).length
   : `<span aria-hidden="true">${label}</span>`;
 
 const card = (p, withCat) => `<a class="card" href="#/producto/${p.id}">
-  <div class="ph" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
+  <div class="ph${pics(p).length ? ' has-img' : ''}" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
   <div class="nm">${esc(p.name)}</div>${withCat ? `<div class="ct">${esc(p.cat)}</div>` : ''}
   <div class="pr"><b>${fmt(p.price)}</b>${p.old ? ` <s>${fmt(p.old)}</s>` : ''}</div></a>`;
 
@@ -140,15 +140,15 @@ ${heroHTML()}
 
 /* ---------- listados (categoría, ofertas, búsqueda) ---------- */
 let F = null;
-function initFilters(base, presetSub) {
+function initFilters(base, presetSub, presetGoal) {
   const prices = base.map(p => p.price);
   const lo = prices.length ? Math.floor(Math.min(...prices) / 10) * 10 : 0;
   const hi = prices.length ? Math.ceil(Math.max(...prices) / 10) * 10 : 100;
-  F = { base, lo, hi, min: lo, max: hi, subs: new Set(presetSub ? [presetSub] : []), ages: new Set(), offers: false, sort: 'sales' };
+  F = { base, lo, hi, min: lo, max: hi, subs: new Set(presetSub ? [presetSub] : []), goals: new Set(presetGoal ? [presetGoal] : []), ages: new Set(), offers: false, sort: 'sales' };
 }
 function filtered() {
   const list = F.base.filter(p =>
-    (!F.subs.size || F.subs.has(p.sub)) && p.price >= F.min && p.price <= F.max &&
+    (!F.subs.size || F.subs.has(p.sub)) && (!F.goals.size || (p.goals || []).some(g => F.goals.has(g))) && p.price >= F.min && p.price <= F.max &&
     (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old) && p.stock > 0);
   const by = {
     sales: (a, b) => (a.tag === 'Top' ? 0 : 1) - (b.tag === 'Top' ? 0 : 1),
@@ -167,13 +167,16 @@ function updateGrid(pending) {
      <p>${pending ? 'Estamos preparando esta sección.' : 'Prueba quitando algún filtro.'}</p>
      <a class="btn" href="#/">Volver al inicio</a></div>`;
   $$('[data-f=sub]').forEach(i => { i.checked = F.subs.has(i.value); });
+  $$('[data-f=goal]').forEach(i => { i.checked = F.goals.has(i.value); });
   const all = $('[data-f=subs-all]'); if (all) all.checked = F.subs.size === 0;
   $('#min-out') && ($('#min-out').textContent = 'S/ ' + F.min);
   $('#max-out') && ($('#max-out').textContent = 'S/ ' + F.max);
 }
-function listPage({ title, crumbList, base, sub, pending, showSubs = true }) {
-  initFilters(base, sub);
-  const subs = [...new Set(base.map(p => p.sub))];
+function listPage({ title, crumbList, base, sub, goal, pending, showSubs = true, subLabel = 'Subcategoría', subList = null, goalsList = [] }) {
+  initFilters(base, sub, goal);
+  const subs = subList || [...new Set(base.map(p => p.sub))];
+  const goalList = goalsList.map(g => [g, base.filter(p => p.stock > 0 && (p.goals || []).includes(g)).length]).filter(x => x[1]);
+  const hasAges = base.some(p => p.ages && p.ages.length);
   const html = `
 <div class="cat-page">
   ${crumbs(crumbList)}
@@ -188,17 +191,19 @@ function listPage({ title, crumbList, base, sub, pending, showSubs = true }) {
   </div>
   <div class="cat-body">
     <form class="filters" id="filters" onsubmit="return false" aria-label="Filtros">
-      ${showSubs ? `<fieldset><legend>Subcategoría</legend>
+      ${showSubs ? `<fieldset><legend>${esc(subLabel)}</legend>
         <label class="chk"><input type="checkbox" data-f="subs-all" checked> Todas</label>
         ${subs.map(s => `<label class="chk"><input type="checkbox" data-f="sub" value="${esc(s)}"> ${esc(s)}</label>`).join('')}</fieldset>` : ''}
+      ${goalList.length ? `<fieldset><legend>Por beneficio</legend>
+        ${goalList.map(([g, n]) => `<label class="chk"><input type="checkbox" data-f="goal" value="${esc(g)}"> ${esc(g)} <span class="cnt">${n}</span></label>`).join('')}</fieldset>` : ''}
       <fieldset><legend>Precio</legend>
         <div class="range">
           <input type="range" data-f="min" min="${F.lo}" max="${F.hi}" step="5" value="${F.min}" aria-label="Precio mínimo">
           <input type="range" data-f="max" min="${F.lo}" max="${F.hi}" step="5" value="${F.max}" aria-label="Precio máximo">
           <div class="vals"><span id="min-out"></span><span id="max-out"></span></div>
         </div></fieldset>
-      <fieldset><legend>Edad del niño</legend>
-        <div class="age-chips">${['0–1', '1–3', '3–6'].map(a => `<label><input type="checkbox" data-f="age" value="${a}"><span>${a}</span></label>`).join('')}</div></fieldset>
+      ${hasAges ? `<fieldset><legend>Edad del niño</legend>
+        <div class="age-chips">${['0–1', '1–3', '3–6'].map(a => `<label><input type="checkbox" data-f="age" value="${a}"><span>${a}</span></label>`).join('')}</div></fieldset>` : ''}
       <div><label class="chk"><input type="checkbox" data-f="offers"> Solo ofertas</label>
         <label class="chk"><input type="checkbox" checked disabled> Disponible</label></div>
     </form>
@@ -210,11 +215,17 @@ function listPage({ title, crumbList, base, sub, pending, showSubs = true }) {
 function pageCategory(cat, sub) {
   if (!D.catOrder.includes(cat)) return pageNotFound();
   const base = D.products.filter(p => p.cat === cat);
+  const cf = (D.catFilter || {})[cat] || {};
+  let goal = null;
+  const gl = (D.catGoals || {})[cat] || [];
+  if (sub && sub.startsWith('beneficio:')) { goal = gl.includes(sub.slice(10)) ? sub.slice(10) : null; sub = null; }
   const has = sub && base.some(p => p.sub === sub);
+  const crumb = sub || goal;
   return listPage({
-    title: sub || cat,
-    crumbList: [['Inicio', '#/'], [cat, sub ? catHref(cat) : null], ...(sub ? [[sub]] : [])],
-    base, sub: has ? sub : null, pending: sub && !has ? sub : null
+    title: crumb || cat,
+    crumbList: [['Inicio', '#/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
+    base, sub: has ? sub : null, goal, pending: sub && !has ? sub : null,
+    subLabel: cf.label || 'Subcategoría', subList: cf.options && cf.options.length ? cf.options : null, goalsList: gl
   });
 }
 function pageOffers() {
@@ -240,11 +251,11 @@ function pageProduct(id) {
   ${crumbs([['Inicio', '#/'], [p.cat, catHref(p.cat)], [p.name]])}
   <div class="pdp-grid">
     <div class="thumbs">
-      ${Array.from({ length: n }, (_, i) => `<button class="thumb ph" data-act="pdp-img" data-i="${i}" style="background:${p.tone}" aria-label="Ver foto ${i + 1}">${gal[i] ? `<img src="${esc(gal[i])}" alt="">` : ''}</button>`).join('')}
+      ${Array.from({ length: n }, (_, i) => `<button class="thumb ph${gal[i] ? ' has-img' : ''}" data-act="pdp-img" data-i="${i}" style="background:${p.tone}" aria-label="Ver foto ${i + 1}">${gal[i] ? `<img src="${esc(gal[i])}" alt="">` : ''}</button>`).join('')}
       <button class="thumb video" data-act="toast" data-msg="El video estará disponible pronto">▶ video</button>
     </div>
     <div>
-      <div class="main-img ph" id="main-img" style="background:${p.tone}">${gal.length ? `<img id="main-pic" src="${esc(gal[0])}" alt="${esc(p.name)}">` : '<span id="main-lbl">[foto principal]</span>'}</div>
+      <div class="main-img ph${gal.length ? ' has-img' : ''}" id="main-img" style="background:${p.tone}">${gal.length ? `<img id="main-pic" src="${esc(gal[0])}" alt="${esc(p.name)}">` : '<span id="main-lbl">[foto principal]</span>'}</div>
       <div class="dots" aria-label="Fotos">${Array.from({ length: n }, (_, i) => i).map(i =>`<button data-act="pdp-img" data-i="${i}" aria-label="Foto ${i + 1}"></button>`).join('')}</div>
     </div>
     <div class="info">
@@ -296,7 +307,7 @@ function cartView() {
   <div>
     <div class="free-bar" role="status">${need > 0 ? `Te faltan <b>${fmt(need)}</b> para envío gratis en Lima` : '¡Tienes envío gratis en Lima!'}<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>
     <div class="lines">${cart.map((l, i) => { const p = P(l.id); return `<div class="line">
-      <div class="ph" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
+      <div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
       <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u</div>
         <button class="link ul" data-act="line-rm" data-i="${i}">Quitar</button></div>
       <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos">–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más">+</button></div>
@@ -364,7 +375,7 @@ function choiceHTML(kind, map, selected, disabledKeys = []) {
 }
 function summaryHTML(inner) {
   const st = ui.co, t = totals(st.ship);
-  const rows = cart.map(l => { const p = P(l.id); return `<div class="sum-line"><div class="ph" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
+  const rows = cart.map(l => { const p = P(l.id); return `<div class="sum-line"><div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
     <div class="t"><b>${esc(p.name)}</b><br><span class="muted">${l.opt ? esc(l.opt) + ' · ' : ''}Cant. ${l.qty}</span></div><b>${fmt(p.price * l.qty)}</b></div>`; }).join('');
   return `${inner ? '' : '<h2>Resumen del pedido</h2>'}${rows}
     <div class="srow" style="border-top:1px solid var(--line);padding-top:12px"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
@@ -506,8 +517,8 @@ function openMega(k) {
   if (ui.mega === k) return;
   ui.mega = k;
   const p = m.promo && P(m.promo.id);
-  box.innerHTML = m.cols.map(c => `<div><h3>${esc(c.t)}</h3><ul>${c.l.map(l => `<li><a href="${catHref(k, l)}">${esc(l)}</a></li>`).join('')}</ul></div>`).join('') +
-    (!p ? '' : `<a class="promo-card" href="#/producto/${p.id}" style="background:${p.tone}"><div class="ph" aria-hidden="true">[foto destacada]</div>
+  box.innerHTML = m.cols.map(c => `<div><h3>${esc(c.t)}</h3><ul>${c.l.map(l => `<li><a href="${catHref(k, (c.kind === 'goal' ? 'beneficio:' : '') + l)}">${esc(l)}</a></li>`).join('')}</ul></div>`).join('') +
+    (!p ? '' : `<a class="promo-card" href="#/producto/${p.id}" style="background:${p.tone}"><div class="ph${pics(p).length ? ' has-img' : ''}" aria-hidden="true">${pics(p).length ? `<img src="${esc(pics(p)[0])}" alt="">` : '[foto destacada]'}</div>
       <div class="txt"><div class="eyebrow">Destacado</div><div class="name">${esc(p.name)}</div><div class="sub">${esc(m.promo.s)}</div></div></a>`);
   box.hidden = false;
   $$('#nav-row a').forEach(a => a.setAttribute('aria-expanded', a.dataset.mega === k ? 'true' : 'false'));
@@ -534,7 +545,8 @@ function markNav(seg) {
 /* ---------- menú móvil ---------- */
 function buildDrawer() {
   $('#drawer-body').innerHTML = D.catOrder.map((c, i) => {
-    const subs = [...new Set(D.products.filter(p => p.cat === c).map(p => p.sub))];
+    const cf = (D.catFilter || {})[c] || {};
+    const subs = cf.options && cf.options.length ? cf.options : [...new Set(D.products.filter(p => p.cat === c).map(p => p.sub))];
     return `<div class="d-item"><button data-act="d-acc" aria-expanded="false" aria-controls="ds-${i}"><span>${esc(c)}</span><span aria-hidden="true">⌄</span></button>
       <div class="d-sub" id="ds-${i}" hidden>${subs.map(s => `<a href="${catHref(c, s)}" data-act="drawer-close">${esc(s)}</a>`).join('')}<a href="${catHref(c)}" data-act="drawer-close"><b>Ver todo ${esc(c)}</b></a></div></div>`;
   }).join('') +
@@ -650,6 +662,7 @@ document.addEventListener('change', e => {
   if (t.dataset.coCheck) { ui.co[t.dataset.coCheck] = t.checked; if (t.dataset.coCheck === 'ruc') { ui.co.err = {}; render(true); } return; }
   if (!f || !F) return;
   if (f === 'sub') { t.checked ? F.subs.add(t.value) : F.subs.delete(t.value); }
+  if (f === 'goal') { t.checked ? F.goals.add(t.value) : F.goals.delete(t.value); }
   if (f === 'subs-all') { F.subs.clear(); }
   if (f === 'age') { t.checked ? F.ages.add(t.value) : F.ages.delete(t.value); }
   if (f === 'offers') F.offers = t.checked;
