@@ -337,3 +337,5 @@ details.card>summary .reorder{display:flex;align-items:center}
 .d-name small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
 .d-row select,.d-row input{border:1.5px solid var(--field);border-radius:8px;padding:7px 10px;background:#fff;min-height:36px;width:100%;min-width:0}
 @media (max-width:700px){.d-head{display:none}.d-row{grid-template-columns:1fr 80px 100px}.d-row input[data-d=note]{grid-column:1/-1}}
+.pay-set.is-off .grid3{opacity:.5}
+.chk-on small{color:var(--muted)}

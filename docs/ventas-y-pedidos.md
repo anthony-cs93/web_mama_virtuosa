@@ -112,7 +112,7 @@ Pestaña **Pedidos** (primera de la barra), con un **contador rojo** de pagos po
 
 Pestaña **Envíos** con dos bloques:
 
-- **Zonas de entrega**: «Envío gratis en Lima desde», y nombre/plazo de Delivery Lima, Agencia a provincia (con su costo) y Recojo en tienda.
+- **Zonas de entrega**: «Envío gratis en Lima desde», y nombre/plazo de Delivery Lima, Agencia a provincia (con su costo) y Recojo en tienda. Cada modalidad se puede **activar o desactivar**: las desactivadas no aparecen en el checkout y el servidor las rechaza (siempre debe quedar al menos una activa).
 - **Delivery Lima: costo por distrito**: tabla de 50 distritos (43 de Lima + 7 del Callao) con **¿Se envía? (Sí/No)**, **costo** y **observación**. Las filas «No» se ven en gris y las «Sí» sin costo en rojo (al guardar quedan como sin reparto). Estos distritos alimentan el desplegable del checkout, y el servidor vuelve a validar el distrito y su costo al crear el pedido.
 - **Importar Excel / Descargar Excel**: la plantilla es [costos-envio-distritos.xlsx](../costos-envio-distritos.xlsx) (hoja «Envíos»; creada a partir de la hoja CDM de AC Mueblería, con sus costos iniciales). Se edita en Excel, se importa y se pulsa **Guardar cambios**. El lector de Excel (SheetJS) se carga solo al importar o descargar. Los nombres de distrito son fijos: no se agregan ni se borran filas.
 

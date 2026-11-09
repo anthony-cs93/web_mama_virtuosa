@@ -62,7 +62,7 @@ export function buildOrder(store, b) {
 
   /* entrega */
   const zone = (data.shipping || {})[b.ship];
-  if (!zone) throw new Fail('Elige cómo quieres recibir tu pedido');
+  if (!zone || zone.on === false) throw new Fail('Elige cómo quieres recibir tu pedido');
   const ship = b.ship;
   const address = { depto: '', prov: '', distrito: '', dir: '', ref: '' };
   let distCost = null;

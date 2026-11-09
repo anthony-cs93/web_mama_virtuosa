@@ -174,7 +174,10 @@ export function migrateConfig(store) {
   }
   c.pay = pay;
   c.coupons = normCoupons(c.coupons);
-  if (store.data && typeof store.data === 'object') store.data.districts = normDistricts(store.data.districts);
+  if (store.data && typeof store.data === 'object') {
+    store.data.districts = normDistricts(store.data.districts);
+    for (const z of Object.values(store.data.shipping || {})) if (z && typeof z === 'object') z.on = z.on !== false;
+  }
   return store;
 }
 /* Sin control de stock: los productos agotados (stock 0) pasan a «ocultos» y se elimina el campo stock. */

@@ -70,6 +70,8 @@ const surchargePct = () => Number((PAYCFG.card && PAYCFG.card.surcharge) || 0);
 const PAY_SHORT = { yape: 'Yape', bank: 'transferencia', card: 'tarjeta' };
 const payNames = () => { const n = payKeys().map(k => PAY_SHORT[k]); if (payKeys().includes('yape')) n.splice(1, 0, 'Plin'); return n.join(', '); };
 
+const shipOn = k => !!D.shipping[k] && D.shipping[k].on !== false;
+const shipKeys = () => Object.keys(D.shipping).filter(shipOn);
 const districts = () => D.districts || [];
 const sendable = () => districts().filter(d => d.ship && d.cost !== null);
 const districtOf = name => sendable().find(d => d.name === name);
@@ -119,7 +121,7 @@ async function applyCoupon(raw) {
 /* ---------- estado de interfaz ---------- */
 const ui = {
   pdp: { qty: 1, opt: null, img: 0 },
-  co: { ship: 'lima', pay: payKeys()[0] || 'yape', f: (() => { const f = { ...store.get('mv_fields', {}) }; if (!f.name && (f.nombres || f.apellidos)) f.name = `${f.nombres || ''} ${f.apellidos || ''}`.trim(); delete f.nombres; delete f.apellidos; return f; })(), err: {}, agree: false, doc: false, busy: false },
+  co: { ship: Object.keys(D.shipping).find(k => D.shipping[k].on !== false) || 'lima', pay: payKeys()[0] || 'yape', f: (() => { const f = { ...store.get('mv_fields', {}) }; if (!f.name && (f.nombres || f.apellidos)) f.name = `${f.nombres || ''} ${f.apellidos || ''}`.trim(); delete f.nombres; delete f.apellidos; return f; })(), err: {}, agree: false, doc: false, busy: false },
   couponMsg: null,
   playing: null, elapsed: {}, topic: 'Todos', mega: null
 };
@@ -384,7 +386,7 @@ const couponBox = () => `<form class="coupon" data-form="coupon"><input name="co
     ${coupon && coupon.min && totals().sub < coupon.min ? `<div class="coupon-msg bad" role="status">El cupón ${esc(coupon.code)} aplica desde ${fmt(coupon.min)} en productos.</div>` : ''}`;
 function cartView() {
   const t = totals();
-  const free = C.freeShippingFrom > 0;
+  const free = C.freeShippingFrom > 0 && shipOn('lima');
   const need = Math.max(0, C.freeShippingFrom - t.sub);
   const pct = Math.min(100, t.sub / (C.freeShippingFrom || 1) * 100).toFixed(0);
   let body;
@@ -506,7 +508,8 @@ function summaryHTML(inner) {
 function checkoutView() {
   const st = ui.co, t = totals(st.ship, st.pay);
   const minLima = sendable().length ? Math.min(...sendable().map(d => d.cost)) : 0;
-  const shipEntries = Object.keys(D.shipping).map(k => {
+  if (!shipOn(st.ship)) st.ship = shipKeys()[0] || st.ship;
+  const shipEntries = shipKeys().map(k => {
     const o = D.shipping[k], c = shipCost(t.sub, k);
     if (k === 'pick') return { k, l: PICKUP.l, s: PICKUP.addr, price: 'Gratis' };
     return { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : c === null ? 'Desde ' + money0(minLima) : fmt(c) };
@@ -542,6 +545,7 @@ function checkoutView() {
 }
 function pageCheckout() {
   if (!cart.length) { location.replace('#/carrito'); return null; }
+  if (!shipOn(ui.co.ship)) ui.co.ship = shipKeys()[0] || ui.co.ship;
   return { title: 'Finalizar compra', html: checkoutView() };
 }
 function setBusy(on) {

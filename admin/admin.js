@@ -36,6 +36,7 @@ const IC = {
   layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
   sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  truck: '<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
   bag: '<path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>'
 };
 const ic = n => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -223,7 +224,7 @@ $('#logout').addEventListener('click', async () => {
   location.reload();
 });
 
-const TAB_ICONS = { productos: 'box', categorias: 'layers', portada: 'image', podcast: 'mic', ajustes: 'sliders', pedidos: 'bag' };
+const TAB_ICONS = { productos: 'box', categorias: 'layers', portada: 'image', podcast: 'mic', ajustes: 'sliders', pedidos: 'bag', envios: 'truck' };
 function decorateTabs() {
   $$('#tabs [data-tab]').forEach(b => { if (!b.querySelector('.ic') && TAB_ICONS[b.dataset.tab]) b.insertAdjacentHTML('afterbegin', ic(TAB_ICONS[b.dataset.tab])); });
 }
@@ -1176,11 +1177,14 @@ function renderShipping() {
   <div class="sec-head"><div><h1>Envíos</h1><p class="muted">Zonas de entrega y costo de delivery por distrito. Aplica con «Guardar cambios».</p></div></div>
   <div class="card"><h2>Zonas de entrega</h2>
     <label class="fld" style="max-width:300px;margin-bottom:14px"><span>Envío gratis en Lima desde (S/)</span><input type="number" min="0" step="1" data-bind="config.freeShippingFrom" data-num value="${c.freeShippingFrom}"></label>
-    <div class="stack">${Object.entries(d.shipping).map(([k, s]) => `<div class="grid3">
+    <p class="muted small" style="margin:0 0 12px">Desactiva una modalidad para que deje de ofrecerse en el checkout (debe quedar al menos una activa).</p>
+    <div class="stack">${Object.entries(d.shipping).map(([k, s]) => `<div class="pay-set${s.on === false ? ' is-off' : ''}">
+      <label class="chk-on"><input type="checkbox" data-ship-on="${k}"${s.on !== false ? ' checked' : ''}> <b>${esc(s.l)}</b> <small>· ${s.on !== false ? 'activo' : 'desactivado'}</small></label>
+      <div class="grid3">
       <label class="fld"><span>Nombre</span><input type="text" data-bind="data.shipping.${k}.l" value="${esc(s.l)}"></label>
       <label class="fld"><span>Plazo</span><input type="text" data-bind="data.shipping.${k}.s" value="${esc(s.s)}"></label>
       ${k === 'prov' ? `<label class="fld"><span>Costo (S/)</span><input type="number" min="0" step="0.5" data-bind="data.shipping.${k}.p" data-num value="${s.p}"></label>`
-        : `<div class="fld"><span>Costo</span><div class="muted" style="padding:9px 0">${k === 'lima' ? 'Por distrito (tabla de abajo)' : 'Gratis'}</div></div>`}</div>`).join('')}</div></div>
+        : `<div class="fld"><span>Costo</span><div class="muted" style="padding:9px 0">${k === 'lima' ? 'Por distrito (tabla de abajo)' : 'Gratis'}</div></div>`}</div></div>`).join('')}</div></div>
   <div class="card"><div class="sec-head" style="margin-bottom:12px"><div><h2 style="margin:0">Delivery Lima: costo por distrito</h2><p class="muted small" id="d-count">${distCount()}</p></div>
     <div class="r" style="display:flex;gap:10px;flex-wrap:wrap"><label class="btn ghost sm" style="cursor:pointer">Importar Excel<input type="file" id="d-file" accept=".xlsx,.xls" hidden></label>
       <button type="button" class="btn ghost sm" data-act="sh-export">Descargar Excel</button></div></div>
@@ -1241,6 +1245,12 @@ async function exportShipping() {
     X.writeFile(wb, 'costos-envio-distritos.xlsx');
   } catch (err) { toast(err.message, true); }
 }
+view.addEventListener('change', e => {
+  const k = e.target.dataset.shipOn; if (!k) return;
+  const sh = D().shipping;
+  if (!e.target.checked && !Object.keys(sh).some(x => x !== k && sh[x].on !== false)) { e.target.checked = true; return toast('Debe quedar al menos una forma de entrega activa.', true); }
+  sh[k].on = e.target.checked; markDirty(); renderShipping();
+});
 view.addEventListener('change', e => { if (e.target.id === 'd-file' && e.target.files[0]) { importShipping(e.target.files[0]); e.target.value = ''; } });
 function shipClick(b, act) { if (act === 'sh-export') exportShipping(); }
 
