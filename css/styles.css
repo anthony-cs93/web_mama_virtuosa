@@ -518,7 +518,7 @@ main{flex:1;outline:none}
 .copy-row{display:grid;grid-template-columns:80px 1fr auto;gap:10px;align-items:center;background:var(--page);border-radius:10px;padding:10px 14px}
 .copy-row span{color:var(--muted);font-size:13px}
 .copy-row b{overflow-wrap:anywhere}
-.qr{width:200px;height:200px;object-fit:contain;border-radius:12px;border:1px solid var(--line);background:#fff;align-self:center}
+.qr{width:min(100%,340px);height:auto;max-height:520px;object-fit:contain;border-radius:12px;border:1px solid var(--line);background:#fff;align-self:center}
 .proof{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .proof label.btn{cursor:pointer}
 .proof-ok{background:#f0fbef;border-radius:10px;padding:12px 14px;color:#2f5a2f;font-weight:600;font-size:14px}
