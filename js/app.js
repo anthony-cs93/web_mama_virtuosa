@@ -197,7 +197,7 @@ ${heroHTML()}
     <div class="nm">${esc(c)}</div><div class="sb">${esc(D.catSub[c])}</div></a>`).join('')}</div>
 </section>
 <section class="section s48" aria-labelledby="h-best">
-  <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="${catHref('Belleza')}">Ver todo →</a></div>
+  <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="#/mas-vendidos">Ver todo →</a></div>
   <div class="prod-grid">${best.map(p => card(p, true)).join('')}</div>
 </section>
 <section class="podcast-band" aria-labelledby="h-pod">
@@ -231,7 +231,7 @@ function filtered() {
     p.price >= F.min && p.price <= F.max &&
     (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old));
   const by = {
-    sales: (a, b) => (a.tag === 'Top' ? 0 : 1) - (b.tag === 'Top' ? 0 : 1),
+    sales: (a, b) => (F.rank ? F.rank.get(a.id) - F.rank.get(b.id) : (a.tag === 'Top' ? 0 : 1) - (b.tag === 'Top' ? 0 : 1)),
     new: (a, b) => (a.tag === 'Nuevo' ? 0 : 1) - (b.tag === 'Nuevo' ? 0 : 1),
     asc: (a, b) => a.price - b.price,
     desc: (a, b) => b.price - a.price
@@ -253,8 +253,9 @@ function updateGrid(pending) {
   $('#min-out') && ($('#min-out').textContent = 'S/ ' + F.min);
   $('#max-out') && ($('#max-out').textContent = 'S/ ' + F.max);
 }
-function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null }) {
+function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null, rank = null }) {
   initFilters(base, sub, filters, preset);
+  if (rank) F.rank = new Map(rank.map((id, i) => [id, i]));
   const subs = [...new Set(base.map(p => p.sub).filter(Boolean))];
   const hasAges = base.some(p => p.ages && p.ages.length);
   /* un bloque por cada filtro configurado en el panel; solo se listan las opciones que tienen productos */
@@ -320,6 +321,11 @@ function pageCategory(cat, seg) {
     crumbList: [['Inicio', '#/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
     base, filters, preset, pending: crumb && !preset ? crumb : null
   });
+}
+/* «Ver todo» de «Más vendidos» del inicio: los mismos productos destacados desde el panel, en el orden elegido */
+function pageBest() {
+  const base = (D.featured || []).map(P).filter(Boolean);
+  return listPage({ title: 'Más vendidos', crumbList: [['Inicio', '#/'], ['Más vendidos']], base, rank: base.map(p => p.id) });
 }
 function pageOffers() {
   return listPage({ title: 'Ofertas', crumbList: [['Inicio', '#/'], ['Ofertas']], base: D.products.filter(p => p.old) });
@@ -864,6 +870,7 @@ function render(keepScroll) {
     case undefined: r = pageHome(); break;
     case 'categoria': r = pageCategory(seg[1], seg[2]); break;
     case 'ofertas': r = pageOffers(); break;
+    case 'mas-vendidos': r = pageBest(); break;
     case 'buscar': r = pageSearch(seg[1] || ''); break;
     case 'producto': r = pageProduct(seg[1]); break;
     case 'carrito': r = pageCart(); break;
