@@ -204,15 +204,15 @@ ${heroHTML()}
     <div class="ph" style="background:${D.catTone[c]}">${catIcon(c)}</div>
     <div class="nm">${esc(c)}</div><div class="sb">${esc(D.catSub[c])}</div></a>`).join('')}</div>
 </section>
-${D.catOrder.includes('Belleza') ? `<section class="section s48 gom-band" aria-labelledby="h-bel">
-  <div class="sec-head"><h2 class="sec-title" id="h-bel">Belleza</h2><a class="link" href="${catHref('Belleza')}">Ver todo →</a></div>
-  <a class="gom-banner" href="${catHref('Belleza')}"><img src="img/banner_belleza.jpg" width="2000" height="667" alt="Maquillaje: labiales, brochas, rubor y esmalte de uñas sobre fondo rosa" loading="lazy"></a>
-  ${belleza.length ? `<div class="prod-grid">${belleza.map(p => card(p)).join('')}</div>` : ''}
-</section>` : ''}
 ${gomitas.length ? `<section class="section s48 gom-band" aria-labelledby="h-gom">
   <div class="sec-head"><h2 class="sec-title" id="h-gom">Gomitas Saludables</h2><a class="link" href="${catHref('Gomitas saludables')}">Ver todo →</a></div>
   <a class="gom-banner" href="${catHref('Gomitas saludables')}"><img src="img/banner_gomitas.jpg" width="2000" height="667" alt="Una familia disfruta de las gomitas saludables" loading="lazy"></a>
   <div class="prod-grid">${gomitas.map(p => card(p)).join('')}</div>
+</section>` : ''}
+${D.catOrder.includes('Belleza') ? `<section class="section s48 gom-band" aria-labelledby="h-bel">
+  <div class="sec-head"><h2 class="sec-title" id="h-bel">Belleza</h2><a class="link" href="${catHref('Belleza')}">Ver todo →</a></div>
+  <a class="gom-banner" href="${catHref('Belleza')}"><img src="img/banner_belleza.jpg" width="2000" height="667" alt="Maquillaje: labiales, brochas, rubor y esmalte de uñas sobre fondo rosa" loading="lazy"></a>
+  ${belleza.length ? `<div class="prod-grid">${belleza.map(p => card(p)).join('')}</div>` : ''}
 </section>` : ''}
 ${D.catOrder.includes('Ropa infantil') ? `<section class="section s48 gom-band" aria-labelledby="h-rop">
   <div class="sec-head"><h2 class="sec-title" id="h-rop">Ropita infantil</h2><a class="link" href="${catHref('Ropa infantil')}">Ver todo →</a></div>
