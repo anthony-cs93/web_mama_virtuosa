@@ -1304,7 +1304,10 @@ function drawOrders() {
       <span class="o-who">${esc(o.name)}<small>${esc(when(o.createdAt))} · ${esc(O_PAY[o.method])}${o.status === 'cancelled' && o.cancelledAt ? ` · <i class="o-gone">${esc(goneIn(o.cancelledAt))}</i>` : ''}</small></span>
       <b class="o-tot">${fmt(o.total)}</b><span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></button>`).join('') : '<p class="muted">No hay pedidos en esta vista.</p>'}</div>
     ${list.length > ordLimit ? `<div style="text-align:center;margin-top:14px"><button type="button" class="btn ghost sm" data-act="o-more">Ver más (${list.length - ordLimit})</button></div>` : ''}`;
+  setTimeout(prefetchVisibleOrders, 250);
 }
+view.addEventListener('pointerover', e => { const r = e.target.closest && e.target.closest('.o-row'); if (r) prefetchOrder(r.dataset.code); });
+view.addEventListener('focusin', e => { const r = e.target.closest && e.target.closest('.o-row'); if (r) prefetchOrder(r.dataset.code); });
 /* mantiene el resumen de la lista al día cuando se abre o cambia un pedido completo */
 function syncSummary(o) {
   const s = { code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof, cancelledAt: o.status === 'cancelled' ? (o.cancelledAt || undefined) : undefined };
@@ -1314,12 +1317,35 @@ function syncSummary(o) {
 }
 view.addEventListener('change', e => { if (e.target.dataset.of !== undefined) { ordF = e.target.value; drawOrders(); } });
 
+/* Abrir un pedido es instantáneo: si ya se vio (o se precargó) se muestra al momento y se refresca detrás;
+   si no, se muestra de inmediato lo que ya sabemos (el resumen de la lista) mientras llega el detalle. */
+const ORDP = {};   // pedidos que se están descargando (precarga)
+function fetchOrder(code) {
+  if (!ORDP[code]) ORDP[code] = api('GET', '/api/orders-admin?code=' + encodeURIComponent(code)).then(r => { ORDF[code] = r.order; return r.order; }).finally(() => { delete ORDP[code]; });
+  return ORDP[code];
+}
+function prefetchOrder(code) { if (!ORDF[code] && !ORDP[code]) fetchOrder(code).catch(() => {}); }
+function prefetchVisibleOrders() { if (!ORD) return; [...document.querySelectorAll('#o-box .o-row')].slice(0, 4).forEach(r => prefetchOrder(r.dataset.code)); }
+function orderPreview(code) {
+  const s = (ORD || []).find(x => x.code === code);
+  if (!s) return '<div class="dlg-body"><p class="muted" role="status">Cargando pedido…</p></div>';
+  return `<div class="dlg-head"><h2 id="ord-t">${esc(s.code)} <span class="o-st s-${s.status}">${O_STATUS[s.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
+    <div class="dlg-body" data-code="${esc(s.code)}" aria-busy="true">
+      <section class="o-sec"><h3>Resumen</h3><div class="o-kv"><span>Cliente</span><b>${esc(s.name)}</b></div><div class="o-kv"><span>Total</span><b>${fmt(s.total)}</b></div>
+        <div class="o-kv"><span>Fecha</span><b>${esc(when(s.createdAt))}</b></div><div class="o-kv"><span>Pago</span><b>${esc(O_PAY[s.method] || s.method)}</b></div></section>
+      <p class="muted o-loading" role="status"><span class="spin" aria-hidden="true"></span> Cargando el detalle…</p>
+      <div class="o-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>`;
+}
 async function openOrder(code) {
-  if (!odlg.open) { odlg.innerHTML = '<div class="dlg-body"><p class="muted" role="status">Cargando pedido…</p></div>'; odlg.setAttribute('aria-label', 'Pedido ' + code); odlg.showModal(); }
+  const cached = ORDF[code];
+  if (!odlg.open) { odlg.setAttribute('aria-label', 'Pedido ' + code); odlg.innerHTML = cached ? '' : orderPreview(code); if (cached) renderOrderDialog(cached); else odlg.showModal(); }
   try {
-    const o = (await api('GET', '/api/orders-admin?code=' + encodeURIComponent(code))).order;
-    ORDF[code] = o; syncSummary(o); renderOrderDialog(o);
-  } catch (err) { odlg.close(); toast(err.message, true); }
+    const fresh = await fetchOrder(code);
+    const cur = $('.dlg-body', odlg);
+    if (!odlg.open || !cur || (cur.dataset.code && cur.dataset.code !== code)) return;   // el usuario ya cerró o abrió otro
+    const editing = $('#o-save') && !$('#o-save').disabled;                              // no pisar un cambio de estado a medias
+    if (!cached || !editing) { syncSummary(fresh); if (!cached || JSON.stringify(fresh) !== JSON.stringify(cached)) renderOrderDialog(fresh); }
+  } catch (err) { if (!cached) { odlg.close(); } toast(err.message, true); }
 }
 function renderOrderDialog(o) {
   const t = o.totals, c = o.customer, d = o.delivery, a = d.address;
@@ -1351,12 +1377,20 @@ function renderOrderDialog(o) {
   if (!odlg.open) odlg.showModal();
 }
 async function setOrderStatus(code, status, note, btn) {
-  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+  const sel = $('#o-status', odlg), html = btn && btn.innerHTML;
+  if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.innerHTML = '<span class="spin" aria-hidden="true"></span> Guardando…'; }
+  if (sel) sel.disabled = true;
+  odlg.querySelectorAll('[data-act=o-paid],[data-act=o-cancel],[data-act=o-save]').forEach(x => { if (x !== btn) x.disabled = true; });
   try {
     const r = await api('POST', '/api/orders-admin', { code, status, note });
     ORDF[code] = r.order; syncSummary(r.order); renderOrderDialog(r.order);
     toast('Estado: ' + O_STATUS[status]);
-  } catch (e) { toast(e.message, true); if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); } }
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); btn.innerHTML = html; }
+    if (sel) sel.disabled = false;
+    odlg.querySelectorAll('[data-act=o-paid],[data-act=o-cancel]').forEach(x => { x.disabled = false; });
+  }
 }
 odlg.addEventListener('click', async e => {
   if (e.target.closest('[data-close]')) return odlg.close();

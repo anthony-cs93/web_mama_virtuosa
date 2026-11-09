@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { del, list, put } from '@vercel/blob';
@@ -10,6 +10,15 @@ import { LOCAL, LOCAL_DIR, sameStr } from './_lib.js';
 
 export const STATUSES = ['pending', 'review', 'paid', 'preparing', 'ready', 'delivered', 'cancelled'];
 export const MAX_QTY = 10;
+/* El token del enlace del cliente se deriva del código con una clave del servidor: así el panel encuentra un pedido
+   con una sola lectura (sin listar el Blob) y, aun así, nadie puede adivinar el enlace. Los pedidos anteriores conservan su token aleatorio. */
+const SECRET = () => process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || 'dev';
+export const orderToken = code => createHmac('sha256', SECRET()).update('pedido:' + code).digest('hex').slice(0, 32);
+/* Dirección pública de un archivo del Blob, calculada a partir del token de la tienda (evita la llamada list()) */
+function blobUrl(path) {
+  const m = /^vercel_blob_rw_([^_]+)_/.exec(process.env.BLOB_READ_WRITE_TOKEN || '');
+  return m ? `https://${m[1].toLowerCase()}.public.blob.vercel-storage.com/${path.split('/').map(encodeURIComponent).join('/')}` : null;
+}
 /* Los pedidos cancelados se conservan este tiempo y luego se eliminan (con su comprobante) */
 export const CANCEL_KEEP_DAYS = 30;
 const DAY = 86400000;
@@ -122,7 +131,7 @@ export function buildOrder(store, b) {
   const now = new Date().toISOString();
   const code = 'MV-' + Array.from(randomBytes(6), x => ALPHA[x % ALPHA.length]).join('');
   return {
-    code, token: randomBytes(16).toString('hex'), createdAt: now, status: 'pending',
+    code, token: orderToken(code), createdAt: now, status: 'pending',
     history: [{ status: 'pending', at: now, note: 'Pedido creado' }],
     customer: { name, phone, email },
     delivery: { ship, label: ship === 'pick' ? 'Recojo en tienda' : zone.l, eta: zone.s || '', address },
@@ -163,6 +172,8 @@ async function readOrderRaw(code, token) {
   if (!CODE_RE.test(code || '') || !TOKEN_RE.test(token || '')) return null;
   const path = pathOf(code, token);
   if (LOCAL) { try { return JSON.parse(await readFile(abs(path), 'utf8')); } catch { return null; } }
+  const url = blobUrl(path);
+  if (url) return fetchJson(url).catch(() => null);   // una sola lectura
   const { blobs } = await list({ prefix: path, limit: 1 });
   const b = blobs.find(x => x.pathname === path);
   return b ? fetchJson(b.url) : null;
@@ -174,6 +185,7 @@ export async function readOrder(code, token) {
 /* Solo para el panel: se busca por código */
 async function findOrderRaw(code) {
   if (!CODE_RE.test(code || '')) return null;
+  if (!LOCAL) { const direct = await readOrderRaw(code, orderToken(code)); if (direct) return direct; }   // pedidos nuevos: 1 lectura
   const prefix = `pedidos/${code}-`;
   if (LOCAL) {
     let names = []; try { names = await readdir(abs('pedidos')); } catch { /* aún no hay pedidos */ }
@@ -189,10 +201,20 @@ export async function findOrder(code) {
 }
 /* Índice de pedidos: un solo archivo con el resumen de cada uno, para que el panel no descargue cientos de archivos.
    Se actualiza en segundo plano al crear o cambiar un pedido; si no existe (o se borra) se reconstruye solo. */
-const INDEX = 'pedidos-indice.json';
+/* La dirección del índice depende de una clave del servidor: antes estaba en una URL fija que cualquiera podía abrir. */
+const INDEX_OLD = 'pedidos-indice.json';
+const INDEX = 'pedidos-indice-' + createHmac('sha256', SECRET()).update('indice').digest('hex').slice(0, 24) + '.json';
+async function dropOldIndex() {
+  if (LOCAL) { await unlink(abs(INDEX_OLD)).catch(() => {}); return; }
+  const { blobs } = await list({ prefix: INDEX_OLD, limit: 5 });
+  const old = blobs.filter(b => b.pathname === INDEX_OLD).map(b => b.url);
+  if (old.length) await del(old);
+}
 const summary = o => ({ code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof, cancelledAt: cancelledAtOf(o) || undefined });
 async function readIndex() {
   if (LOCAL) { try { return JSON.parse(await readFile(abs(INDEX), 'utf8')); } catch { return null; } }
+  const url = blobUrl(INDEX);
+  if (url) return fetchJson(url).catch(() => null);
   const { blobs } = await list({ prefix: INDEX, limit: 1 });
   const b = blobs.find(x => x.pathname === INDEX);
   return b ? fetchJson(b.url) : null;
@@ -213,6 +235,7 @@ export async function listSummaries() {
   if (!idx) {
     idx = { updatedAt: new Date().toISOString(), orders: (await listOrders(2000)).map(summary) };
     await writeJson(INDEX, idx);
+    dropOldIndex().catch(() => {});   // borra el índice antiguo que estaba abierto al público
   }
   if (idx.orders.some(o => o.status === 'cancelled' && (!o.cancelledAt || expiredAt(o.cancelledAt)))) {
     const r = await purgeExpiredOrders();

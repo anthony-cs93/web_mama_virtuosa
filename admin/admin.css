@@ -344,3 +344,13 @@ details.card>summary .reorder{display:flex;align-items:center}
 .o-gone{font-style:normal;font-weight:700;color:var(--red)}
 .o-gone-box{display:flex;gap:10px;align-items:flex-start;background:#fde4e2;border:1px solid #f0b9b5;color:#7a1f19;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45}
 .o-gone-box .ic{margin-top:2px;color:var(--red)}
+
+/* pedido: carga y guardado */
+.o-loading{display:flex;align-items:center;gap:10px;margin:6px 0 0}
+.o-skel{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.o-skel i{display:block;height:14px;border-radius:7px;background:linear-gradient(90deg,var(--line) 25%,var(--page) 50%,var(--line) 75%);background-size:200% 100%;animation:shimmer 1.1s linear infinite}
+.o-skel i:nth-child(2){width:80%}.o-skel i:nth-child(3){width:55%}
+@keyframes shimmer{to{background-position:-200% 0}}
+.btn[aria-busy=true]{display:inline-flex;align-items:center;gap:8px;opacity:.85}
+.btn[aria-busy=true] .spin{width:14px;height:14px;border-width:2px}
+@media (prefers-reduced-motion:reduce){.o-skel i{animation:none}}
