@@ -339,3 +339,8 @@ details.card>summary .reorder{display:flex;align-items:center}
 @media (max-width:700px){.d-head{display:none}.d-row{grid-template-columns:1fr 80px 100px}.d-row input[data-d=note]{grid-column:1/-1}}
 .pay-set.is-off .grid3{opacity:.5}
 .chk-on small{color:var(--muted)}
+
+/* pedidos cancelados */
+.o-gone{font-style:normal;font-weight:700;color:var(--red)}
+.o-gone-box{display:flex;gap:10px;align-items:flex-start;background:#fde4e2;border:1px solid #f0b9b5;color:#7a1f19;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45}
+.o-gone-box .ic{margin-top:2px;color:var(--red)}

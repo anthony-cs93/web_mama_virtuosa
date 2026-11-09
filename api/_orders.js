@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { list, put } from '@vercel/blob';
+import { del, list, put } from '@vercel/blob';
 import { waitUntil } from '@vercel/functions';
 import { LOCAL, LOCAL_DIR, sameStr } from './_lib.js';
 
@@ -10,6 +10,14 @@ import { LOCAL, LOCAL_DIR, sameStr } from './_lib.js';
 
 export const STATUSES = ['pending', 'review', 'paid', 'preparing', 'ready', 'delivered', 'cancelled'];
 export const MAX_QTY = 10;
+/* Los pedidos cancelados se conservan este tiempo y luego se eliminan (con su comprobante) */
+export const CANCEL_KEEP_DAYS = 30;
+const DAY = 86400000;
+export const cancelledAtOf = o => (o && o.status === 'cancelled'
+  ? (o.cancelledAt || ([...(o.history || [])].reverse().find(h => h.status === 'cancelled') || {}).at || o.createdAt) : null);
+export const expiresAtOf = at => (at ? new Date(new Date(at).getTime() + CANCEL_KEEP_DAYS * DAY).toISOString() : null);
+const expiredAt = at => !!at && Date.now() - new Date(at).getTime() > CANCEL_KEEP_DAYS * DAY;
+export const isExpiredCancelled = o => expiredAt(cancelledAtOf(o));
 const ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_RE = /^MV-[A-Z0-9]{6}$/, TOKEN_RE = /^[a-f0-9]{32}$/;
 const r2 = n => Math.round(n * 100) / 100;
@@ -151,7 +159,7 @@ async function fetchJson(url) {
 }
 export async function saveOrder(o) { await writeJson(pathOf(o.code, o.token), o); }
 
-export async function readOrder(code, token) {
+async function readOrderRaw(code, token) {
   if (!CODE_RE.test(code || '') || !TOKEN_RE.test(token || '')) return null;
   const path = pathOf(code, token);
   if (LOCAL) { try { return JSON.parse(await readFile(abs(path), 'utf8')); } catch { return null; } }
@@ -159,8 +167,12 @@ export async function readOrder(code, token) {
   const b = blobs.find(x => x.pathname === path);
   return b ? fetchJson(b.url) : null;
 }
+export async function readOrder(code, token) {
+  const o = await readOrderRaw(code, token);
+  return o && isExpiredCancelled(o) ? null : o;
+}
 /* Solo para el panel: se busca por código */
-export async function findOrder(code) {
+async function findOrderRaw(code) {
   if (!CODE_RE.test(code || '')) return null;
   const prefix = `pedidos/${code}-`;
   if (LOCAL) {
@@ -171,10 +183,14 @@ export async function findOrder(code) {
   const { blobs } = await list({ prefix, limit: 1 });
   return blobs[0] ? fetchJson(blobs[0].url) : null;
 }
+export async function findOrder(code) {
+  const o = await findOrderRaw(code);
+  return o && isExpiredCancelled(o) ? null : o;
+}
 /* Índice de pedidos: un solo archivo con el resumen de cada uno, para que el panel no descargue cientos de archivos.
    Se actualiza en segundo plano al crear o cambiar un pedido; si no existe (o se borra) se reconstruye solo. */
 const INDEX = 'pedidos-indice.json';
-const summary = o => ({ code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof });
+const summary = o => ({ code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof, cancelledAt: cancelledAtOf(o) || undefined });
 async function readIndex() {
   if (LOCAL) { try { return JSON.parse(await readFile(abs(INDEX), 'utf8')); } catch { return null; } }
   const { blobs } = await list({ prefix: INDEX, limit: 1 });
@@ -198,7 +214,50 @@ export async function listSummaries() {
     idx = { updatedAt: new Date().toISOString(), orders: (await listOrders(2000)).map(summary) };
     await writeJson(INDEX, idx);
   }
+  if (idx.orders.some(o => o.status === 'cancelled' && (!o.cancelledAt || expiredAt(o.cancelledAt)))) {
+    const r = await purgeExpiredOrders();
+    if (r.orders) return r.orders;
+  }
   return idx.orders;
+}
+
+/* ---------- limpieza de pedidos cancelados (a los 30 días) ---------- */
+async function deleteOrderFiles(o) {
+  const path = pathOf(o.code, o.token), proofUrl = o.proof && o.proof.url;
+  if (LOCAL) {
+    await unlink(abs(path)).catch(() => {});
+    if (proofUrl && proofUrl.startsWith('/.data/')) await unlink(abs(proofUrl.slice(7))).catch(() => {});
+    return;
+  }
+  const urls = [];
+  const { blobs } = await list({ prefix: path, limit: 1 });
+  const b = blobs.find(x => x.pathname === path); if (b) urls.push(b.url);
+  if (proofUrl && /^https:\/\//.test(proofUrl)) urls.push(proofUrl);
+  if (urls.length) await del(urls);
+}
+/* Borra los pedidos cancelados con más de 30 días (archivo, comprobante y fila del índice). Es seguro repetirla. */
+export async function purgeExpiredOrders() {
+  const idx = await readIndex();
+  if (!idx) return { removed: 0, orders: null };
+  let removed = 0, changed = false;
+  const keep = [];
+  for (const row of idx.orders) {
+    if (row.status !== 'cancelled') { keep.push(row); continue; }
+    let r = row, full = null, at = row.cancelledAt;
+    if (!at) {   // fila antigua del índice: se completa con la fecha real de la cancelación
+      full = await findOrderRaw(row.code);
+      if (!full) { changed = true; continue; }
+      at = cancelledAtOf(full); r = { ...row, cancelledAt: at }; changed = true;
+    }
+    if (expiredAt(at)) {
+      full = full || await findOrderRaw(row.code);
+      if (full) await deleteOrderFiles(full);
+      removed++; changed = true; continue;
+    }
+    keep.push(r);
+  }
+  if (changed) await writeJson(INDEX, { updatedAt: new Date().toISOString(), orders: keep });
+  return { removed, orders: keep };
 }
 export async function listOrders(limit = 200) {
   let orders = [];

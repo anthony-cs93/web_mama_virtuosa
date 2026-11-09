@@ -638,7 +638,7 @@ function trackHTML(o) {
   let cur = 0; flow.forEach((s, i) => { if (ORDER_FLOW.indexOf(s) <= rank) cur = i; });
   const last = flow[cur] === 'delivered';
   return `<ol class="track-list" aria-label="Estado del pedido">${flow.map((s, i) => { const at = statusAt(o, s), done = i < cur || (i === cur && last);
-    return `<li class="${done ? 'done' : i === cur ? 'cur' : ''}"${i === cur ? ' aria-current="step"' : ''}><i aria-hidden="true">${done ? '✓' : i + 1}</i><span>${esc(stepLabel(o, s))}</span>${at && i <= cur ? `<small>${esc(when(at))}</small>` : ''}</li>`; }).join('')}</ol>`;
+    return `<li class="${done ? 'is-done' : i === cur ? 'is-cur' : ''}"${i === cur ? ' aria-current="step"' : ''}><i aria-hidden="true">${done ? '✓' : i + 1}</i><span>${esc(stepLabel(o, s))}</span>${at && i <= cur ? `<small>${esc(when(at))}</small>` : ''}</li>`; }).join('')}</ol>`;
 }
 function orderHTML(o, fresh) {
   const t = o.totals, d = o.delivery;

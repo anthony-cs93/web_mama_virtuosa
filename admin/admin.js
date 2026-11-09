@@ -1267,6 +1267,11 @@ const O_FILTERS = [
   ['cancelled', 'Cancelados', o => o.status === 'cancelled'],
   ['all', 'Todos', () => true]
 ];
+/* Pedidos cancelados: se conservan 30 días y luego se eliminan solos */
+const CANCEL_DAYS = 30;
+const daysLeft = at => Math.max(0, Math.ceil(CANCEL_DAYS - (Date.now() - new Date(at).getTime()) / 86400000));
+const goneIn = at => { if (!at) return ''; const n = daysLeft(at); return n <= 0 ? 'Se elimina hoy' : `Se elimina en ${n} día${n === 1 ? '' : 's'}`; };
+const goneDate = at => new Date(new Date(at).getTime() + CANCEL_DAYS * 86400000).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
 let ORD = null, ORDF = {}, ordF = 'open', ordLimit = 50;   // ORD: resúmenes; ORDF: pedidos completos ya abiertos
 const odlg = $('#ord');
 const when = iso => new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1293,15 +1298,16 @@ function drawOrders() {
   const counts = Object.fromEntries(O_FILTERS.map(([k, , fn]) => [k, ORD.filter(fn).length]));
   const list = ORD.filter(O_FILTERS.find(f => f[0] === ordF)[2]);
   box.innerHTML = `<div class="chips" role="radiogroup" aria-label="Filtrar pedidos">${O_FILTERS.map(([k, l]) => `<label><input type="radio" name="of" value="${k}" data-of${k === ordF ? ' checked' : ''}><span>${l} (${counts[k]})</span></label>`).join('')}</div>
+    ${ordF === 'cancelled' ? `<p class="muted small" style="margin:12px 0 0">Los pedidos cancelados se conservan <b>${CANCEL_DAYS} días</b> y después se eliminan automáticamente, junto con su comprobante de pago.</p>` : ''}
     <div class="rows" style="margin-top:14px">${list.length ? list.slice(0, ordLimit).map(o => `<button type="button" class="row o-row" data-act="o-open" data-code="${esc(o.code)}">
       <b class="o-code">${esc(o.code)}</b>
-      <span class="o-who">${esc(o.name)}<small>${esc(when(o.createdAt))} · ${esc(O_PAY[o.method])}</small></span>
+      <span class="o-who">${esc(o.name)}<small>${esc(when(o.createdAt))} · ${esc(O_PAY[o.method])}${o.status === 'cancelled' && o.cancelledAt ? ` · <i class="o-gone">${esc(goneIn(o.cancelledAt))}</i>` : ''}</small></span>
       <b class="o-tot">${fmt(o.total)}</b><span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></button>`).join('') : '<p class="muted">No hay pedidos en esta vista.</p>'}</div>
     ${list.length > ordLimit ? `<div style="text-align:center;margin-top:14px"><button type="button" class="btn ghost sm" data-act="o-more">Ver más (${list.length - ordLimit})</button></div>` : ''}`;
 }
 /* mantiene el resumen de la lista al día cuando se abre o cambia un pedido completo */
 function syncSummary(o) {
-  const s = { code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof };
+  const s = { code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof, cancelledAt: o.status === 'cancelled' ? (o.cancelledAt || undefined) : undefined };
   const i = ORD.findIndex(x => x.code === o.code);
   if (i < 0) ORD.unshift(s); else ORD[i] = s;
   ordBadge(); drawOrders();
@@ -1322,6 +1328,7 @@ function renderOrderDialog(o) {
   const line = (k, v) => v ? `<div class="o-kv"><span>${k}</span><b>${esc(v)}</b></div>` : '';
   odlg.innerHTML = `<div class="dlg-head"><h2 id="ord-t">${esc(o.code)} <span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
   <div class="dlg-body" data-code="${esc(o.code)}">
+    ${o.status === 'cancelled' && o.cancelledAt ? `<div class="o-gone-box">${ic('trash')}<span>Pedido cancelado. Se conservará hasta el <b>${esc(goneDate(o.cancelledAt))}</b> (${esc(goneIn(o.cancelledAt).toLowerCase())}) y después se eliminará junto con su comprobante.</span></div>` : ''}
     <section class="o-sec"><h3>Cliente</h3>${line('Nombre', c.name)}${line('Celular', c.phone)}${line('Correo', c.email)}
       ${o.doc ? line(o.doc.type === 'boleta' ? 'Boleta · DNI' : 'Factura · RUC', o.doc.type === 'boleta' ? o.doc.dni : `${o.doc.ruc} · ${o.doc.razon}`) : ''}${line('Nota del cliente', o.notes)}</section>
     <section class="o-sec"><h3>Entrega</h3>${line('Modalidad', d.label + (d.eta ? ' · ' + d.eta : ''))}

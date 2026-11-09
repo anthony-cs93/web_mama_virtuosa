@@ -182,3 +182,11 @@ Para que confirmar sea rápido: el servidor guarda una copia en memoria del cat�
 
 - Dirección del punto de recojo (hoy se coordina por WhatsApp).
 - Pasarela automática (Izipay / Mercado Pago) para cobrar tarjeta sin intervención.
+
+## Pedidos cancelados: se conservan 30 días
+
+- Al cancelar un pedido se guarda la fecha (`cancelledAt`). El panel muestra «Se elimina en N días» en la lista y un aviso en el detalle.
+- Pasados **30 días** el pedido se elimina por completo: su archivo, su comprobante de pago y su fila del índice. La página del cliente deja de existir (error 404) en cuanto vence.
+- La limpieza corre sola de dos formas: cada vez que se abre el listado de pedidos del panel y una vez al día con la tarea programada `/api/orders-purge` (ver `crons` en `vercel.json`). Con la variable `CRON_SECRET` en Vercel, esa tarea exige el secreto.
+- Si reabres un pedido cancelado (lo pasas a otro estado), deja de contar y no se elimina.
+- El plazo se cambia en `CANCEL_KEEP_DAYS` (`api/_orders.js`) y `CANCEL_DAYS` (`admin/admin.js`).

@@ -9,5 +9,8 @@
     "api/orders.js": {
       "includeFiles": "data/store.json"
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/orders-purge", "schedule": "0 8 * * *" }
+  ]
 }
