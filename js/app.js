@@ -132,10 +132,14 @@ const imgOrLabel = (p, label) => pics(p).length
   ? `<img src="${esc(pics(p)[0])}" alt="${esc(p.name)}" loading="lazy">`
   : `<span aria-hidden="true">${label}</span>`;
 
-const card = (p, withCat) => `<a class="card" href="#/producto/${p.id}">
+/* Botón flotante sobre la foto (aparece al pasar el mouse o con el teclado). Si el producto tiene talla o color, lleva a su página para elegir */
+const quickAdd = p => `<div class="qa">${p.opt && p.opt.values && p.opt.values.length
+  ? `<a class="quick-add" href="#/producto/${p.id}">Elegir opciones</a>`
+  : `<button type="button" class="quick-add" data-act="quick-add" data-id="${p.id}" aria-label="Agregar ${esc(p.name)} al carrito">Agregar al carrito</button>`}</div>`;
+const card = (p, withCat) => `<div class="card-wrap"><a class="card" href="#/producto/${p.id}">
   <div class="ph${pics(p).length ? ' has-img' : ''}" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
   <div class="nm">${esc(p.name)}</div>${withCat ? `<div class="ct">${esc(p.cat)}</div>` : ''}
-  <div class="pr"><b>${fmt(p.price)}</b>${p.old ? ` <s>${fmt(p.old)}</s>` : ''}</div></a>`;
+  <div class="pr"><b>${fmt(p.price)}</b>${p.old ? ` <s>${fmt(p.old)}</s>` : ''}</div></a>${quickAdd(p)}</div>`;
 
 const crumbs = list => `<nav class="crumbs" aria-label="Ruta">${list.map(([l, h]) => h ? `<a href="${h}">${esc(l)}</a>` : `<span aria-current="page">${esc(l)}</span>`).join(' › ')}</nav>`;
 
@@ -900,6 +904,12 @@ const actions = {
   'pdp-qty'(el) { const p = P(currentProductId()); ui.pdp.qty = Math.max(1, Math.min(MAX_QTY, ui.pdp.qty + (+el.dataset.d))); syncPDP(); },
   'pdp-opt'(el) { ui.pdp.opt = el.dataset.v; syncPDP(); },
   'pdp-img'(el) { ui.pdp.img = +el.dataset.i; syncPDP(); },
+  'quick-add'(el) {
+    const p = P(+el.dataset.id); if (!p) return;
+    const capped = addToCart(p.id, null, 1);
+    nudgeCart();
+    toast(capped ? 'Ya tienes el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '#/carrito', label: 'Ver carrito' });
+  },
   'pdp-add'() {
     const capped = addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty);
     nudgeCart();
