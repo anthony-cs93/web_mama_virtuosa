@@ -171,6 +171,35 @@ export async function findOrder(code) {
   const { blobs } = await list({ prefix, limit: 1 });
   return blobs[0] ? fetchJson(blobs[0].url) : null;
 }
+/* Índice de pedidos: un solo archivo con el resumen de cada uno, para que el panel no descargue cientos de archivos.
+   Se actualiza en segundo plano al crear o cambiar un pedido; si no existe (o se borra) se reconstruye solo. */
+const INDEX = 'pedidos-indice.json';
+const summary = o => ({ code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof });
+async function readIndex() {
+  if (LOCAL) { try { return JSON.parse(await readFile(abs(INDEX), 'utf8')); } catch { return null; } }
+  const { blobs } = await list({ prefix: INDEX, limit: 1 });
+  const b = blobs.find(x => x.pathname === INDEX);
+  return b ? fetchJson(b.url) : null;
+}
+async function updateIndex(o) {
+  const idx = await readIndex();
+  if (!idx) return; // aún no hay índice: se arma completo la primera vez que el panel lo pide
+  const rows = idx.orders.filter(x => x.code !== o.code); rows.push(summary(o));
+  rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  await writeJson(INDEX, { updatedAt: new Date().toISOString(), orders: rows });
+}
+export function updateIndexLater(o) {
+  const p = updateIndex(o).catch(() => {});
+  try { waitUntil(p); } catch { /* fuera de Vercel se ejecuta igual */ }
+}
+export async function listSummaries() {
+  let idx = await readIndex();
+  if (!idx) {
+    idx = { updatedAt: new Date().toISOString(), orders: (await listOrders(2000)).map(summary) };
+    await writeJson(INDEX, idx);
+  }
+  return idx.orders;
+}
 export async function listOrders(limit = 200) {
   let orders = [];
   if (LOCAL) {
@@ -215,6 +244,7 @@ export async function setStatus(code, status, note) {
   if (o.status === status) return o;
   pushStatus(o, status, note || 'Estado cambiado desde el panel');
   await saveOrder(o);
+  updateIndexLater(o);
   return o;
 }
 

@@ -1,5 +1,5 @@
 import { readStore } from './_lib.js';
-import { Fail, buildOrder, evaluateCoupon, notifyLater, publicOrder, pushStatus, readOrder, saveOrder, saveProof } from './_orders.js';
+import { Fail, buildOrder, evaluateCoupon, notifyLater, publicOrder, updateIndexLater, pushStatus, readOrder, saveOrder, saveProof } from './_orders.js';
 
 /* API pública de pedidos
    POST                 crea el pedido
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
       o.proof = { url, at: new Date().toISOString() };
       pushStatus(o, 'review', 'El cliente subió su comprobante');
       await saveOrder(o);
+      updateIndexLater(o);
       notifyLater('Comprobante recibido', o);
       return res.status(200).json({ order: publicOrder(o) });
     }
@@ -42,6 +43,7 @@ export default async function handler(req, res) {
     const { store } = await readStore();
     const o = buildOrder(store, b);
     await saveOrder(o);
+    updateIndexLater(o);
     notifyLater('Nuevo pedido', o);
     return res.status(200).json({ code: o.code, token: o.token, order: publicOrder(o) });
   } catch (e) {

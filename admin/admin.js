@@ -1267,7 +1267,7 @@ const O_FILTERS = [
   ['cancelled', 'Cancelados', o => o.status === 'cancelled'],
   ['all', 'Todos', () => true]
 ];
-let ORD = null, ordF = 'open';
+let ORD = null, ORDF = {}, ordF = 'open', ordLimit = 50;   // ORD: resúmenes; ORDF: pedidos completos ya abiertos
 const odlg = $('#ord');
 const when = iso => new Date(iso).toLocaleString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -1283,8 +1283,9 @@ async function loadOrders() {
 }
 async function renderOrders() {
   view.innerHTML = `<div class="sec-head"><div><h1>Pedidos</h1><p class="muted">Los cambios de estado se guardan al instante.</p></div>
-    <button class="btn ghost sm" data-act="o-refresh">${ic('refresh')} Actualizar</button></div><div id="o-box"><p class="muted">Cargando pedidos…</p></div>`;
-  try { await loadOrders(); } catch (e) { $('#o-box').innerHTML = `<p class="form-err">${esc(e.message)}</p>`; return; }
+    <button class="btn ghost sm" data-act="o-refresh">${ic('refresh')} Actualizar</button></div><div id="o-box">${ORD ? '' : '<p class="muted">Cargando pedidos…</p>'}</div>`;
+  if (ORD) drawOrders(); // ya se cargó al entrar al panel: se muestra al instante y se actualiza detrás
+  try { await loadOrders(); } catch (e) { if (ORD) toast(e.message, true); else $('#o-box').innerHTML = `<p class="form-err">${esc(e.message)}</p>`; return; }
   drawOrders();
 }
 function drawOrders() {
@@ -1292,15 +1293,29 @@ function drawOrders() {
   const counts = Object.fromEntries(O_FILTERS.map(([k, , fn]) => [k, ORD.filter(fn).length]));
   const list = ORD.filter(O_FILTERS.find(f => f[0] === ordF)[2]);
   box.innerHTML = `<div class="chips" role="radiogroup" aria-label="Filtrar pedidos">${O_FILTERS.map(([k, l]) => `<label><input type="radio" name="of" value="${k}" data-of${k === ordF ? ' checked' : ''}><span>${l} (${counts[k]})</span></label>`).join('')}</div>
-    <div class="rows" style="margin-top:14px">${list.length ? list.map(o => `<button type="button" class="row o-row" data-act="o-open" data-code="${esc(o.code)}">
+    <div class="rows" style="margin-top:14px">${list.length ? list.slice(0, ordLimit).map(o => `<button type="button" class="row o-row" data-act="o-open" data-code="${esc(o.code)}">
       <b class="o-code">${esc(o.code)}</b>
-      <span class="o-who">${esc(o.customer.name)}<small>${esc(when(o.createdAt))} · ${esc(O_PAY[o.pay.method])}</small></span>
-      <b class="o-tot">${fmt(o.totals.total)}</b><span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></button>`).join('') : '<p class="muted">No hay pedidos en esta vista.</p>'}</div>`;
+      <span class="o-who">${esc(o.name)}<small>${esc(when(o.createdAt))} · ${esc(O_PAY[o.method])}</small></span>
+      <b class="o-tot">${fmt(o.total)}</b><span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></button>`).join('') : '<p class="muted">No hay pedidos en esta vista.</p>'}</div>
+    ${list.length > ordLimit ? `<div style="text-align:center;margin-top:14px"><button type="button" class="btn ghost sm" data-act="o-more">Ver más (${list.length - ordLimit})</button></div>` : ''}`;
+}
+/* mantiene el resumen de la lista al día cuando se abre o cambia un pedido completo */
+function syncSummary(o) {
+  const s = { code: o.code, name: o.customer.name, createdAt: o.createdAt, status: o.status, total: o.totals.total, method: o.pay.method, proof: !!o.proof };
+  const i = ORD.findIndex(x => x.code === o.code);
+  if (i < 0) ORD.unshift(s); else ORD[i] = s;
+  ordBadge(); drawOrders();
 }
 view.addEventListener('change', e => { if (e.target.dataset.of !== undefined) { ordF = e.target.value; drawOrders(); } });
 
-function openOrder(code) {
-  const o = ORD && ORD.find(x => x.code === code); if (!o) return;
+async function openOrder(code) {
+  if (!odlg.open) { odlg.innerHTML = '<div class="dlg-body"><p class="muted" role="status">Cargando pedido…</p></div>'; odlg.setAttribute('aria-label', 'Pedido ' + code); odlg.showModal(); }
+  try {
+    const o = (await api('GET', '/api/orders-admin?code=' + encodeURIComponent(code))).order;
+    ORDF[code] = o; syncSummary(o); renderOrderDialog(o);
+  } catch (err) { odlg.close(); toast(err.message, true); }
+}
+function renderOrderDialog(o) {
   const t = o.totals, c = o.customer, d = o.delivery, a = d.address;
   const first = c.name.split(' ')[0];
   const canPay = ['pending', 'review'].includes(o.status);
@@ -1332,15 +1347,14 @@ async function setOrderStatus(code, status, note, btn) {
   if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
   try {
     const r = await api('POST', '/api/orders-admin', { code, status, note });
-    const i = ORD.findIndex(x => x.code === code); ORD[i] = r.order;
-    ordBadge(); drawOrders(); openOrder(code);
+    ORDF[code] = r.order; syncSummary(r.order); renderOrderDialog(r.order);
     toast('Estado: ' + O_STATUS[status]);
   } catch (e) { toast(e.message, true); if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); } }
 }
 odlg.addEventListener('click', async e => {
   if (e.target.closest('[data-close]')) return odlg.close();
   const b = e.target.closest('[data-act]'); if (!b) return;
-  const code = $('.dlg-body', odlg).dataset.code, o = ORD.find(x => x.code === code);
+  const code = $('.dlg-body', odlg).dataset.code, o = ORDF[code];
   if (b.dataset.act === 'o-save') return setOrderStatus(code, $('#o-status').value, '', b);
   if (b.dataset.act === 'o-paid') {
     if (await ask({ title: '¿Confirmar el pago?', message: `Pedido <b>${esc(o.code)}</b> de ${esc(o.customer.name)} por <b>${fmt(o.totals.total)}</b>. Revisa que el dinero ya haya llegado.`, confirmText: 'Sí, confirmar pago', icon: 'info' })) setOrderStatus(code, 'paid', 'Pago confirmado desde el panel', b);
@@ -1354,11 +1368,12 @@ odlg.addEventListener('click', async e => {
 });
 odlg.addEventListener('change', e => {
   if (e.target.id !== 'o-status') return;
-  const o = ORD.find(x => x.code === $('.dlg-body', odlg).dataset.code);
+  const o = ORDF[$('.dlg-body', odlg).dataset.code];
   $('#o-save').disabled = e.target.value === o.status;
 });
 function ordClick(b, act) {
   if (act === 'o-open') return openOrder(b.dataset.code);
+  if (act === 'o-more') { ordLimit += 50; return drawOrders(); }
   if (act === 'o-refresh') { b.disabled = true; renderOrders(); }
 }
 

@@ -1,15 +1,20 @@
 import { requireAdmin } from './_lib.js';
-import { Fail, listOrders, notifyLater, setStatus } from './_orders.js';
+import { Fail, findOrder, listSummaries, notifyLater, setStatus } from './_orders.js';
 
 /* Pedidos para el panel (requiere sesión)
-   GET   lista de pedidos, los más recientes primero
+   GET   resumen de los pedidos (índice), los más recientes primero; con ?code= el pedido completo
    POST  { code, status, note? } cambia el estado y lo deja en el historial */
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     if (req.method === 'GET') {
       if (!requireAdmin(req, res)) return;
-      return res.status(200).json({ orders: await listOrders() });
+      if (req.query.code) {
+        const o = await findOrder(String(req.query.code));
+        if (!o) throw new Fail('Pedido no encontrado', 404);
+        return res.status(200).json({ order: o });
+      }
+      return res.status(200).json({ orders: await listSummaries() });
     }
     if (req.method === 'POST') {
       if (!requireAdmin(req, res, { write: true })) return;

@@ -102,7 +102,7 @@ Si Yape o la transferencia no tienen datos cargados, el cliente ve «Te enviamos
 
 Pestaña **Pedidos** (primera de la barra), con un **contador rojo** de pagos por confirmar. Los pedidos **se guardan al instante** (no usan «Guardar cambios»).
 
-- **Lista**: más recientes primero; código, cliente, fecha, medio de pago, total y estado. Filtros: **Por atender** · Por confirmar pago · Pagados · Entregados · Cancelados · Todos.
+- **Lista**: se lee de un solo archivo índice (`pedidos-indice.json`) y muestra los 50 más recientes con «Ver más»; código, cliente, fecha, medio de pago, total y estado. Filtros: **Por atender** · Por confirmar pago · Pagados · Entregados · Cancelados · Todos.
 - **Detalle** (al hacer clic): cliente y contacto, boleta/factura, nota, entrega y dirección, productos, desglose, **comprobante** (imagen ampliable) e historial.
 - **Acciones**: **Confirmar pago** (con confirmación), **cambiar estado** (se elige y se aplica con «Guardar estado»), **Cancelar** (ventana con motivo opcional que ve el cliente, y aviso «ya estaba pagado: devuelve su dinero»), **WhatsApp al cliente** y **Ver página del cliente**.
 - **Estados**: `pending` · `review` · `paid` · `preparing` · `ready` · `delivered` · `cancelled`. Cada cambio queda en el historial con fecha.
@@ -133,7 +133,7 @@ Validaciones del servidor: producto existente y visible (no oculto); cantidad 1�
 
 ### Admin — `/api/orders-admin` (requiere sesión)
 
-`GET` lista los pedidos · `POST { code, status, note? }` cambia el estado (exige además `X-Requested-With: mv-admin`).
+`GET` lista el resumen de los pedidos (con `?code=` devuelve el pedido completo) · `POST { code, status, note? }` cambia el estado (exige además `X-Requested-With: mv-admin`).
 
 ## 9. Almacenamiento
 
@@ -141,6 +141,7 @@ Validaciones del servidor: producto existente y visible (no oculto); cantidad 1�
 |---|---|
 | Catálogo, medios de pago, cupones, envíos | `store.json` en Vercel Blob |
 | Pedidos | `pedidos/<CÓDIGO>-<token>.json` en Vercel Blob |
+| Índice de pedidos (resumen para el panel) | `pedidos-indice.json` en Vercel Blob; se actualiza en segundo plano y se reconstruye solo si falta |
 | Comprobantes | `comprobantes/` en Vercel Blob (públicos, con nombre aleatorio) |
 | Carrito y datos recordados | `localStorage` del cliente (`mv_cart`, `mv_coupon`, `mv_fields`, `mv_orders`) |
 
