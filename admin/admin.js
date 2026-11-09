@@ -1285,6 +1285,7 @@ function ordBadge() {
 async function loadOrders() {
   ORD = (await api('GET', '/api/orders-admin')).orders;
   ordBadge();
+  prefetchTopOrders();   // en segundo plano: no hace esperar a la lista
 }
 async function renderOrders() {
   view.innerHTML = `<div class="sec-head"><div><h1>Pedidos</h1><p class="muted">Los cambios de estado se guardan al instante.</p></div>
@@ -1325,7 +1326,22 @@ function fetchOrder(code) {
   return ORDP[code];
 }
 function prefetchOrder(code) { if (!ORDF[code] && !ORDP[code]) fetchOrder(code).catch(() => {}); }
-function prefetchVisibleOrders() { if (!ORD) return; [...document.querySelectorAll('#o-box .o-row')].slice(0, 4).forEach(r => prefetchOrder(r.dataset.code)); }
+/* Descarga varios pedidos completos con UNA sola llamada: así, al hacer clic, el detalle ya está y se muestra completo al instante */
+const ORDT = {};   // cuándo se descargó cada pedido (para no repetir la precarga a cada rato)
+function prefetchBatch(codes, minAgeMs = 0) {
+  codes = [...new Set(codes)].filter(c => c && !ORDP[c] && Date.now() - (ORDT[c] || 0) >= minAgeMs).slice(0, 15);
+  if (!codes.length) return Promise.resolve();
+  const p = api('GET', '/api/orders-admin?codes=' + codes.map(encodeURIComponent).join(',')).then(r => { r.orders.forEach(o => { ORDF[o.code] = o; ORDT[o.code] = Date.now(); }); }).catch(() => {});
+  codes.forEach(c => { ORDP[c] = p.then(() => ORDF[c]).finally(() => { delete ORDP[c]; }); });
+  return p;
+}
+/* Los pedidos más recientes y los que están por atender se precargan apenas se abre el panel */
+function prefetchTopOrders() {
+  if (!ORD) return Promise.resolve();
+  const closed = o => ['delivered', 'cancelled'].includes(o.status);
+  return prefetchBatch([...ORD.filter(o => !closed(o)).slice(0, 12), ...ORD.filter(closed).slice(0, 3)].map(o => o.code), 20000);
+}
+function prefetchVisibleOrders() { if (!ORD) return; prefetchBatch([...document.querySelectorAll('#o-box .o-row')].slice(0, 8).map(r => r.dataset.code).filter(c => !ORDF[c])); }
 function orderPreview(code) {
   const s = (ORD || []).find(x => x.code === code);
   if (!s) return '<div class="dlg-body"><p class="muted" role="status">Cargando pedido…</p></div>';
@@ -1340,7 +1356,8 @@ async function openOrder(code) {
   const cached = ORDF[code];
   if (!odlg.open) { odlg.setAttribute('aria-label', 'Pedido ' + code); odlg.innerHTML = cached ? '' : orderPreview(code); if (cached) renderOrderDialog(cached); else odlg.showModal(); }
   try {
-    const fresh = await fetchOrder(code);
+    let fresh = await (ORDP[code] || fetchOrder(code));
+    if (!fresh) fresh = await fetchOrder(code);   // no venía en el bloque precargado
     const cur = $('.dlg-body', odlg);
     if (!odlg.open || !cur || (cur.dataset.code && cur.dataset.code !== code)) return;   // el usuario ya cerró o abrió otro
     const editing = $('#o-save') && !$('#o-save').disabled;                              // no pisar un cambio de estado a medias
@@ -1412,10 +1429,26 @@ odlg.addEventListener('change', e => {
   const o = ORDF[$('.dlg-body', odlg).dataset.code];
   $('#o-save').disabled = e.target.value === o.status;
 });
+/* «Actualizar»: el icono gira y la lista se atenúa mientras se descargan los pedidos */
+async function refreshOrders(btn) {
+  if (btn.getAttribute('aria-busy') === 'true') return;
+  const box = $('#o-box');
+  btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.classList.add('is-refreshing'); btn.innerHTML = `${ic('refresh')} Actualizando…`;
+  if (box) box.classList.add('is-loading');
+  try {
+    await loadOrders();   // los detalles guardados se renuevan detrás (prefetchTopOrders) y al abrir cada pedido
+    if (tab === 'pedidos') drawOrders();
+    toast('Pedidos actualizados');
+  } catch (e) { toast(e.message, true); }
+  finally {
+    if (btn.isConnected) { btn.disabled = false; btn.removeAttribute('aria-busy'); btn.classList.remove('is-refreshing'); btn.innerHTML = `${ic('refresh')} Actualizar`; }
+    const b2 = $('#o-box'); if (b2) b2.classList.remove('is-loading');
+  }
+}
 function ordClick(b, act) {
   if (act === 'o-open') return openOrder(b.dataset.code);
   if (act === 'o-more') { ordLimit += 50; return drawOrders(); }
-  if (act === 'o-refresh') { b.disabled = true; renderOrders(); }
+  if (act === 'o-refresh') return refreshOrders(b);
 }
 
 /* ---------- arranque ---------- */

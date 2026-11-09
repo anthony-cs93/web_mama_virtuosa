@@ -9,6 +9,11 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       if (!requireAdmin(req, res)) return;
+      if (req.query.codes) {   // hasta 15 pedidos completos en una sola llamada (se leen en paralelo)
+        const codes = [...new Set(String(req.query.codes).split(',').map(x => x.trim()).filter(Boolean))].slice(0, 15);
+        const found = await Promise.all(codes.map(c => findOrder(c).catch(() => null)));
+        return res.status(200).json({ orders: found.filter(Boolean) });
+      }
       if (req.query.code) {
         const o = await findOrder(String(req.query.code));
         if (!o) throw new Fail('Pedido no encontrado', 404);
