@@ -163,8 +163,11 @@ const DEFAULT_HERO = {
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const heroLive = h => h && h.active !== false && (!h.start || h.start <= todayStr()) && (!h.end || h.end >= todayStr());
 const activeHero = () => (D.heroes || []).find(heroLive) || { ...DEFAULT_HERO, ...(D.hero || {}) };
+const SOON = C.podcastSoon !== false;   // Podcast "Próximamente"; poner podcastSoon:false en la configuración para activarlo
+const isPodcastLink = l => /^#\/podcast/.test(l || '');
+const SOON_TAG = '<small class="soon-tag">Próximamente</small>';
 const safeLink = l => (/^(#|\/|https?:\/\/)/.test(l || '') ? l : '#/');
-const heroBtn = (b, cls) => b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
+const heroBtn = (b, cls) => b && b.label && SOON && isPodcastLink(b.link) ? `<span class="btn${cls} soon" aria-disabled="true">🎙 Podcast ${SOON_TAG}</span>` : b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
 function heroHTML() {
   const h = activeHero();
   const img = h.img ? `<img src="${esc(h.img)}"${h.imgM ? ` srcset="${esc(h.imgM)} 800w, ${esc(h.img)} 1600w" sizes="(max-width:900px) 100vw, 50vw"` : ''} width="1600" height="900" alt="${esc(h.alt || '')}" fetchpriority="high"${h.pos ? ` style="object-position:${esc(h.pos)}"` : ''}>` : '';
@@ -198,12 +201,12 @@ ${heroHTML()}
   <div class="prod-grid">${best.map(p => card(p, true)).join('')}</div>
 </section>
 <section class="podcast-band" aria-labelledby="h-pod">
-  <div class="ph cover"><span aria-hidden="true">[portada podcast]</span></div>
+  <div class="ph cover"><span aria-hidden="true">${SOON ? 'Próximamente' : '[portada podcast]'}</span></div>
   <div>
     <div class="eyebrow">Podcast Mamá Virtuosa</div>
-    <h2 id="h-pod">Últimos episodios</h2>
+    ${SOON ? `<h2 id="h-pod">Próximamente</h2><p class="soon-note">Estamos preparando los primeros episodios. ¡Muy pronto podrás escucharlos aquí!</p>` : `<h2 id="h-pod">Últimos episodios</h2>
     <div class="ep-mini">${D.episodes.slice(0, 3).map(e => `<a href="#/podcast"><span class="dot-play" aria-hidden="true">▶</span><span><b>${esc(e.t)}</b><small>${esc(e.meta)}</small></span></a>`).join('')}</div>
-    <a class="band-link" href="#/podcast">Ver todos los episodios →</a>
+    <a class="band-link" href="#/podcast">Ver todos los episodios →</a>`}
   </div>
 </section>
 <div class="home-end"></div>`
@@ -772,6 +775,11 @@ function pagePodcast() {
   };
 }
 
+function pagePodcastSoon() {
+  return { title: 'Podcast · Próximamente', html: `<div class="empty-cart"><div class="eyebrow">Podcast</div><div class="script">Próximamente</div>
+    <p class="muted">Estamos preparando los primeros episodios.</p><a class="btn" href="#/">Ir al inicio</a></div>` };
+}
+
 /* ---------- ayuda / 404 ---------- */
 function pageHelp(k) {
   const h = D.help[k]; if (!h) return pageNotFound();
@@ -786,7 +794,7 @@ function pageNotFound() {
 const parseHash = () => (location.hash.slice(1) || '/').split('?')[0].split('/').filter(Boolean).map(s => { try { return decodeURIComponent(s); } catch { return s; } });
 function buildNav() {
   $('#nav-row').innerHTML = D.catOrder.map(c => `<a href="${catHref(c)}" data-mega="${esc(c)}" data-nav="${esc(c)}">${esc(c)} <span class="caret" aria-hidden="true">⌄</span></a>`).join('') +
-    '<a href="#/podcast" data-nav="podcast">Podcast</a><a href="#/ofertas" class="offers" data-nav="ofertas">Ofertas</a>';
+    (SOON ? `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>` : '<a href="#/podcast" data-nav="podcast">Podcast</a>') + '<a href="#/ofertas" class="offers" data-nav="ofertas">Ofertas</a>';
 }
 function openMega(k) {
   const m = D.mega[k], box = $('#mega');
@@ -827,7 +835,7 @@ function buildDrawer() {
     return `<div class="d-item"><button data-act="d-acc" aria-expanded="false" aria-controls="ds-${i}"><span>${esc(c)}</span><span aria-hidden="true">⌄</span></button>
       <div class="d-sub" id="ds-${i}" hidden>${subs.map(s => `<a href="${catHref(c, s)}" data-act="drawer-close">${esc(s)}</a>`).join('')}<a href="${catHref(c)}" data-act="drawer-close"><b>Ver todo ${esc(c)}</b></a></div></div>`;
   }).join('') +
-    `<div class="d-item"><a href="#/podcast" data-act="drawer-close">🎙 Podcast</a></div>
+    `<div class="d-item">${SOON ? `<span class="soon" aria-disabled="true">🎙 Podcast ${SOON_TAG}</span>` : '<a href="#/podcast" data-act="drawer-close">🎙 Podcast</a>'}</div>
      <div class="d-item"><a href="#/ofertas" data-act="drawer-close" style="color:var(--plum)">Ofertas</a></div>
      <div class="d-foot"><a href="#/pedidos" data-act="drawer-close">Mis pedidos</a><a href="#/ayuda/envios" data-act="drawer-close">Ayuda</a><a href="#" data-act="wa">WhatsApp</a></div>`;
 }
@@ -862,7 +870,7 @@ function render(keepScroll) {
     case 'checkout': r = pageCheckout(); break;
     case 'pedido': r = pageOrder(seg[1], seg[2]); break;
     case 'pedidos': r = pageMyOrders(); break;
-    case 'podcast': r = pagePodcast(); break;
+    case 'podcast': r = SOON ? pagePodcastSoon() : pagePodcast(); break;
     case 'ayuda': r = pageHelp(seg[1]); break;
     default: r = pageNotFound();
   }
@@ -997,5 +1005,6 @@ document.addEventListener('submit', e => {
 
 /* ---------- arranque ---------- */
 $('#year').textContent = new Date().getFullYear();
-buildNav(); buildDrawer(); updateCartCount(); render();
+buildNav(); buildDrawer();
+if (SOON) { const f = $('.foot-podcast'); if (f) f.outerHTML = `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>`; } updateCartCount(); render();
 })();

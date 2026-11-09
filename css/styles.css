@@ -74,6 +74,14 @@ main{flex:1;outline:none}
 .nav-row a{font:600 15px var(--sans);color:var(--ink);padding:14px 14px 12px;white-space:nowrap;border-bottom:2px solid transparent;display:block;transition:color .15s}
 .nav-row a:hover{color:var(--plum)}
 .nav-row a.on{border-bottom-color:var(--plum)}
+.soon{cursor:not-allowed;opacity:.6;user-select:none}
+.soon-tag{display:inline-block;font:600 10px var(--sans);letter-spacing:.4px;text-transform:uppercase;background:var(--lav);color:var(--lav-ink);border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:middle}
+.nav-row .soon{font:600 15px var(--sans);padding:14px 14px 12px;white-space:nowrap;display:block}
+.btn.soon{background:none;border:1.5px dashed var(--field);color:var(--muted)}
+.btn.soon:hover{background:none;color:var(--muted)}
+.d-item .soon{display:block;padding:14px 0;font:600 16px var(--sans)}
+.foot-grid .soon{display:block;line-height:2}
+.soon-note{font-size:16px;line-height:1.5;color:var(--lav-ink);margin:0}
 .nav-row a.offers{color:var(--plum)}
 .nav-row .caret{font-size:12px;margin-left:2px}
 .mega{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-top:0;box-shadow:0 18px 30px rgba(42,34,48,.12);padding:28px 40px 30px;display:grid;grid-template-columns:repeat(3,1fr) 300px;gap:32px;animation:fade .15s ease-out}
@@ -334,6 +342,8 @@ main{flex:1;outline:none}
 .news button:hover{background:#fff}
 .foot-base{border-top:1px solid var(--muted);margin-top:32px;padding-top:16px;font-size:13px;color:var(--line)}
 .foot-base a{color:var(--line)}
+.foot-base{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;padding-right:88px}
+.foot-base .credit{margin-left:auto;text-align:right}
 .wa-float{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--wa);color:#fff;display:flex;align-items:center;justify-content:center;font:700 13px var(--sans);box-shadow:0 6px 16px rgba(0,0,0,.25);z-index:9;transition:transform .15s}
 .wa-float svg{width:32px;height:32px}
 .wa-float:hover{color:#fff;transform:scale(1.07)}
