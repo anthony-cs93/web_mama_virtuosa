@@ -588,7 +588,7 @@ function payPanel(o) {
     <p>Total a pagar: <b>${tot}</b>${o.totals.surcharge ? ` (incluye recargo de ${fmt(o.totals.surcharge)})` : ''}. Te enviaremos un link de pago seguro por WhatsApp para que pagues con tu tarjeta.</p>
     ${waAsk('Quiero pagar con tarjeta, por favor envíame el link de pago.')}</section>`;
   const info = m === 'yape'
-    ? (cfg.number ? `${copyRow('Número', cfg.number)}${copyRow('Titular', cfg.holder)}${cfg.qr ? `<img class="qr" src="${esc(cfg.qr)}" alt="Código QR de Yape" width="200" height="200">` : ''}` : '')
+    ? (cfg.number || cfg.qr ? `${copyRow('Número', cfg.number)}${copyRow('Titular', cfg.holder)}${cfg.qr ? `<img class="qr" src="${esc(cfg.qr)}" alt="Código QR de Yape" width="200" height="200">` : ''}` : '')
     : (cfg.account || cfg.cci ? `${copyRow('Banco', cfg.bank)}${copyRow('Cuenta', cfg.account)}${copyRow('CCI', cfg.cci)}${copyRow('Titular', cfg.holder)}` : '');
   return `<section class="ord-card"><h2>${m === 'yape' ? 'Paga con Yape o Plin' : 'Paga por transferencia'}</h2>
     <p>Monto exacto: <b class="amt">${tot}</b></p>
