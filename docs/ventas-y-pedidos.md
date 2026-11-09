@@ -156,6 +156,10 @@ Validaciones del servidor: producto existente y visible (no oculto); cantidad 1�
 | `RESEND_API_KEY` + `ORDERS_NOTIFY_EMAIL` | Avisos por correo de pedidos nuevos, comprobantes y pagos confirmados | No (sin ellas no se envían correos) |
 | `ORDERS_FROM_EMAIL` | Remitente (por defecto el de pruebas de Resend) | No |
 
+### Rendimiento al confirmar
+
+Para que confirmar sea rápido: el servidor guarda una copia en memoria del catálogo durante 10 s (el panel siempre lee la versión fresca y al guardar se descarta), responde con el pedido ya armado para que la página del pedido no tenga que pedirlo otra vez, y el correo de aviso se envía en segundo plano (`waitUntil`, paquete `@vercel/functions`).
+
 ## 11. Seguridad y privacidad
 
 - Precios y totales **siempre** los calcula el servidor.

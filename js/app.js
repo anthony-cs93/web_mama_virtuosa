@@ -583,6 +583,7 @@ async function submitOrder(form) {
     store.set('mv_orders', mine.slice(0, 20));
     const keep = { ...f }; delete keep.notes; delete keep.dni;
     store.set('mv_fields', keep);
+    prefetched = r.order ? { code: r.code, token: r.token, order: r.order } : null;
     try { sessionStorage.setItem('mv_fresh', r.code); } catch { /* sin almacenamiento */ }
     cart = []; coupon = null; ui.couponMsg = null; saveCart();
     st.agree = false; st.err = {}; st.f.notes = '';
@@ -657,11 +658,12 @@ function orderHTML(o, fresh) {
       <a class="link" href="#/">← Seguir comprando</a>
     </aside></div>`;
 }
-let ordCtx = null;
+let ordCtx = null, prefetched = null;
 async function loadOrder(code, token, fresh) {
   const box = $('#ord-box'); if (!box) return;
   let o;
-  try {
+  if (prefetched && prefetched.code === code && prefetched.token === token) { o = prefetched.order; prefetched = null; }
+  else try {
     const r = await fetch(`/api/orders?c=${encodeURIComponent(code)}&t=${encodeURIComponent(token)}`, { cache: 'no-store' });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || 'No encontramos este pedido');

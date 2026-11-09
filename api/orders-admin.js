@@ -1,5 +1,5 @@
 import { requireAdmin } from './_lib.js';
-import { Fail, listOrders, notifyOwner, setStatus } from './_orders.js';
+import { Fail, listOrders, notifyLater, setStatus } from './_orders.js';
 
 /* Pedidos para el panel (requiere sesión)
    GET   lista de pedidos, los más recientes primero
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       if (!requireAdmin(req, res, { write: true })) return;
       const b = req.body || {};
       const o = await setStatus(String(b.code || ''), String(b.status || ''), String(b.note || '').slice(0, 200));
-      if (b.status === 'paid') await notifyOwner('Pago confirmado', o);
+      if (b.status === 'paid') notifyLater('Pago confirmado', o);
       return res.status(200).json({ order: o });
     }
     throw new Fail('Método no permitido', 405);

@@ -189,7 +189,17 @@ export function migrateStock(store) {
   }
   return store;
 }
-export async function readStore() {
+/* Copia en memoria del catálogo (10 s por instancia): evita 2 llamadas a Blob en cada pedido.
+   El panel pide siempre la versión fresca ({ fresh: true }) y al guardar se descarta la copia. */
+let cached = null;
+const CACHE_MS = 10000;
+export async function readStore({ fresh = false } = {}) {
+  if (!fresh && cached && Date.now() - cached.at < CACHE_MS) return cached.value;
+  const value = await loadStore();
+  cached = { at: Date.now(), value };
+  return value;
+}
+async function loadStore() {
   if (LOCAL) {
     try { return { store: migrateConfig(migrateStock(migrateFilters(JSON.parse(await readFile(join(LOCAL_DIR, 'store.json'), 'utf8'))))), fromBlob: false }; } catch { /* sin copia local: se usa la semilla */ }
   }
@@ -204,6 +214,7 @@ export async function readStore() {
   return { store: migrateConfig(migrateStock(migrateFilters(await readSeed()))), fromBlob: false };
 }
 export async function writeStore(store) {
+  cached = null;
   const body = JSON.stringify(store, null, 2);
   if (LOCAL) { await mkdir(LOCAL_DIR, { recursive: true }); await writeFile(join(LOCAL_DIR, 'store.json'), body); return; }
   const opts = { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json' };

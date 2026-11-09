@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       if (!requireAdmin(req, res)) return;
-      return res.status(200).json((await readStore()).store);
+      return res.status(200).json((await readStore({ fresh: true })).store);
     }
     if (req.method === 'PUT') {
       if (!requireAdmin(req, res, { write: true })) return;

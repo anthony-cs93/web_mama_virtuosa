@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { list, put } from '@vercel/blob';
+import { waitUntil } from '@vercel/functions';
 import { LOCAL, LOCAL_DIR, sameStr } from './_lib.js';
 
 /* Pedidos: cada uno es un archivo JSON propio (pedidos/<CÓDIGO>-<token>.json). El token es aleatorio:
@@ -220,6 +221,11 @@ export async function setStatus(code, status, note) {
 /* ---------- aviso por correo al dueño (opcional: RESEND_API_KEY + ORDERS_NOTIFY_EMAIL) ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = n => 'S/ ' + Number(n).toFixed(2);
+/* El correo se envía después de responder al cliente (waitUntil mantiene viva la función en Vercel) */
+export function notifyLater(subject, o) {
+  const p = notifyOwner(subject, o);
+  try { waitUntil(p); } catch { /* fuera de Vercel se ejecuta igual */ }
+}
 export async function notifyOwner(subject, o) {
   const key = process.env.RESEND_API_KEY, to = process.env.ORDERS_NOTIFY_EMAIL;
   if (!key || !to) return;
