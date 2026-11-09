@@ -186,6 +186,7 @@ function heroHTML() {
 function pageHome() {
   const best = (D.featured || []).map(P).filter(Boolean).slice(0, 8);
   const gomitas = D.products.filter(p => p.cat === 'Gomitas saludables').slice(0, 4);
+  const ropita = D.products.filter(p => p.cat === 'Ropa infantil').slice(0, 4);
   return {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
@@ -201,6 +202,11 @@ ${gomitas.length ? `<section class="section s48 gom-band" aria-labelledby="h-gom
   <div class="sec-head"><h2 class="sec-title" id="h-gom">Gomitas Saludables</h2><a class="link" href="${catHref('Gomitas saludables')}">Ver todo →</a></div>
   <a class="gom-banner" href="${catHref('Gomitas saludables')}"><img src="img/banner_gomitas.webp" width="1734" height="907" alt="Una familia disfruta de las gomitas saludables" loading="lazy"></a>
   <div class="prod-grid">${gomitas.map(p => card(p)).join('')}</div>
+</section>` : ''}
+${D.catOrder.includes('Ropa infantil') ? `<section class="section s48 gom-band" aria-labelledby="h-rop">
+  <div class="sec-head"><h2 class="sec-title" id="h-rop">Ropita infantil</h2><a class="link" href="${catHref('Ropa infantil')}">Ver todo →</a></div>
+  <a class="gom-banner" href="${catHref('Ropa infantil')}"><img src="img/banner_hurray.jpg" width="1726" height="911" alt="Bebé sonriendo con un saco de dormir Hurray" loading="lazy"></a>
+  ${ropita.length ? `<div class="prod-grid">${ropita.map(p => card(p)).join('')}</div>` : ''}
 </section>` : ''}
 <section class="section s48" aria-labelledby="h-best">
   <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="#/mas-vendidos">Ver todo →</a></div>
@@ -229,13 +235,16 @@ function initFilters(base, presetSub, filters = [], preset = null) {
   const hi = prices.length ? Math.ceil(Math.max(...prices) / 10) * 10 : 100;
   F = { base, lo, hi, min: lo, max: hi, subs: new Set(presetSub ? [presetSub] : []), fl: filters,
     sel: Object.fromEntries(filters.map(f => [f.id, new Set(preset && preset.id === f.id ? [preset.value] : [])])),
-    ages: new Set(), offers: false, sort: 'sales' };
+    ages: new Set(), offers: false, sort: 'sales', quick: null };
 }
+/* Filtro rápido (Niños / Adultos): busca la palabra en la subcategoría, en los valores de filtro y en el nombre del producto */
+const QUICK = { 'Gomitas saludables': [['Niños', 'nino'], ['Adultos', 'adulto']] };
+const quickMatch = (p, key) => norm([p.name, p.sub, ...Object.values(p.f || {}).flat()].join(' ')).includes(key);
 function filtered() {
   const list = F.base.filter(p =>
     (!F.subs.size || F.subs.has(p.sub)) && F.fl.every(f => !F.sel[f.id].size || pvals(p, f).some(v => F.sel[f.id].has(v))) &&
     p.price >= F.min && p.price <= F.max &&
-    (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old));
+    (!F.ages.size || p.ages.some(a => F.ages.has(a))) && (!F.offers || p.old) && (!F.quick || quickMatch(p, F.quick)));
   const by = {
     sales: (a, b) => (F.rank ? F.rank.get(a.id) - F.rank.get(b.id) : (a.tag === 'Top' ? 0 : 1) - (b.tag === 'Top' ? 0 : 1)),
     new: (a, b) => (a.tag === 'Nuevo' ? 0 : 1) - (b.tag === 'Nuevo' ? 0 : 1),
@@ -249,9 +258,10 @@ function updateGrid(pending) {
   const list = pending ? [] : filtered();
   $('#count').textContent = list.length + (list.length === 1 ? ' producto' : ' productos');
   grid.innerHTML = list.length ? list.map(p => card(p)).join('') :
-    `<div class="empty"><div class="script">${pending ? 'Pronto sumaremos “' + esc(pending) + '”' : 'No encontramos productos'}</div>
-     <p>${pending ? 'Estamos preparando esta sección.' : 'Prueba quitando algún filtro.'}</p>
+    `<div class="empty"><div class="script">${pending ? 'Pronto sumaremos “' + esc(pending) + '”' : !F.base.length ? 'Aún no hay productos' : 'No encontramos productos'}</div>
+     <p>${pending || !F.base.length ? 'Estamos preparando esta sección. ¡Muy pronto habrá novedades!' : 'Prueba quitando algún filtro.'}</p>
      <a class="btn" href="#/">Volver al inicio</a></div>`;
+  $$('[data-f=quick]').forEach(i => { i.checked = F.quick === i.value; });
   $$('[data-f=sub]').forEach(i => { i.checked = F.subs.has(i.value); });
   $$('[data-f=fopt]').forEach(i => { i.checked = F.sel[i.dataset.fid].has(i.value); });
   $$('[data-f=fall]').forEach(i => { i.checked = !F.sel[i.dataset.fid].size; });
@@ -259,7 +269,7 @@ function updateGrid(pending) {
   $('#min-out') && ($('#min-out').textContent = 'S/ ' + F.min);
   $('#max-out') && ($('#max-out').textContent = 'S/ ' + F.max);
 }
-function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null, rank = null }) {
+function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null, rank = null, quick = [] }) {
   initFilters(base, sub, filters, preset);
   if (rank) F.rank = new Map(rank.map((id, i) => [id, i]));
   const subs = [...new Set(base.map(p => p.sub).filter(Boolean))];
@@ -279,6 +289,7 @@ function listPage({ title, crumbList, base, sub, pending, showSubs = true, filte
     <div><h1>${esc(title)}</h1><div class="muted" id="count" aria-live="polite"></div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="sort filter-toggle" data-act="filters-toggle" aria-expanded="false" aria-controls="filters">☰ Filtros</button>
+      ${quick.length ? `<div class="quick-chips" role="group" aria-label="Filtro rápido">${quick.map(([l, k]) => `<label><input type="checkbox" data-f="quick" value="${k}"><span>${esc(l)}</span></label>`).join('')}</div>` : ''}
       <label class="sort">Ordenar: <select data-f="sort" aria-label="Ordenar por">
         <option value="sales">Más vendidos</option><option value="new">Novedades</option>
         <option value="asc">Precio: menor a mayor</option><option value="desc">Precio: mayor a menor</option></select></label>
@@ -325,7 +336,7 @@ function pageCategory(cat, seg) {
   return listPage({
     title: crumb || cat,
     crumbList: [['Inicio', '#/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
-    base, filters, preset, pending: crumb && !preset ? crumb : null
+    base, filters, preset, quick: QUICK[cat] || [], pending: crumb && !preset ? crumb : null
   });
 }
 /* «Ver todo» de «Más vendidos» del inicio: los mismos productos destacados desde el panel, en el orden elegido */
@@ -1003,6 +1014,7 @@ document.addEventListener('change', e => {
   if (f === 'fall') { F.sel[t.dataset.fid].clear(); }
   if (f === 'subs-all') { F.subs.clear(); }
   if (f === 'age') { t.checked ? F.ages.add(t.value) : F.ages.delete(t.value); }
+  if (f === 'quick') F.quick = t.checked ? t.value : null;
   if (f === 'offers') F.offers = t.checked;
   if (f === 'sort') F.sort = t.value;
   updateGrid();
