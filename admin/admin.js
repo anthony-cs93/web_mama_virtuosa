@@ -954,7 +954,7 @@ view.addEventListener('input', e => {
    PORTADA (hero) Y CAMPAÑAS DE TEMPORADA
    ===================================================================== */
 const DEFAULT_HERO = {
-  eyebrow: 'Nueva colección', title: 'Todo para mamá y sus peques',
+  eyebrow: 'Nueva colección', title: 'Todo para mamá\ny sus peques',
   text: 'Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.',
   cta1: { label: 'Comprar ahora', link: '#/categoria/Belleza' }, cta2: { label: '▶ Escuchar podcast', link: '#/podcast' },
   img: 'img/hero.jpg', imgM: 'img/hero-m.jpg', alt: 'Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso', pos: '60% 30%', bg: ''
@@ -990,7 +990,7 @@ const heroRange = h => (h.start || h.end ? `${h.start ? fmtDate(h.start) : 'Sin 
 function heroPreview(h) {
   const btn = (b, g) => (b && b.label ? `<i class="${g ? 'g' : ''}">${esc(b.label)}</i>` : '');
   return `<div class="hp" style="background:${esc(h.bg || HERO_BG)}">
-    <div class="hp-t">${h.eyebrow ? `<small>${esc(h.eyebrow)}</small>` : ''}<b>${esc(h.title || 'Título')}</b>${h.text ? `<span>${esc(h.text)}</span>` : ''}<div>${btn(h.cta1)}${btn(h.cta2, true)}</div></div>
+    <div class="hp-t">${h.eyebrow ? `<small>${esc(h.eyebrow)}</small>` : ''}<b>${esc(h.title || 'Título').replace(/\r?\n/g, '<br>')}</b>${h.text ? `<span>${esc(h.text)}</span>` : ''}<div>${btn(h.cta1)}${btn(h.cta2, true)}</div></div>
     <div class="hp-i">${h.img ? `<img src="${esc(src(h.img))}" alt="" style="object-position:${esc(h.pos || '60% 30%')}">` : '<em>Sin imagen</em>'}</div></div>`;
 }
 
@@ -1069,7 +1069,7 @@ function heroDialog(target) {
         <label class="fld"><span>Descripción de la imagen (accesibilidad)</span><input type="text" name="alt" value="${esc(draft.alt)}" maxlength="140"></label></div>
       <div class="grid2">
         <label class="fld"><span>Etiqueta superior</span><input type="text" name="eyebrow" value="${esc(draft.eyebrow)}" maxlength="40" placeholder="Navidad"></label>
-        <label class="fld"><span>Título *</span><input type="text" name="title" value="${esc(draft.title)}" maxlength="70"></label></div>
+        <label class="fld"><span>Título *</span><textarea name="title" rows="2" maxlength="70">${esc(draft.title)}</textarea><small>Presiona Enter para partir el título en dos líneas (en el celular se respeta ese corte).</small></label></div>
       <label class="fld"><span>Texto</span><textarea name="text" rows="2" maxlength="200">${esc(draft.text)}</textarea></label>
       <div class="grid2">
         <div class="stack"><label class="fld"><span>Botón principal: texto</span><input type="text" name="cta1Label" value="${esc(draft.cta1 ? draft.cta1.label : '')}" maxlength="30"></label>

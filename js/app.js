@@ -155,7 +155,7 @@ const catIcon = c => { const u = CAT_ICONS[c] || CAT_ICON_DEFAULT; return `<span
 
 /* ---------- hero (portada) y campañas de temporada ---------- */
 const DEFAULT_HERO = {
-  eyebrow: 'Nueva colección', title: 'Todo para mamá y sus peques',
+  eyebrow: 'Nueva colección', title: 'Todo para mamá\ny sus peques',
   text: 'Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.',
   cta1: { label: 'Comprar ahora', link: '#/categoria/Belleza' }, cta2: { label: '▶ Escuchar podcast', link: '#/podcast' },
   img: 'img/hero.jpg', imgM: 'img/hero-m.jpg', alt: 'Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso', pos: '60% 30%', bg: ''
@@ -174,7 +174,7 @@ function heroHTML() {
   return `<section class="hero" aria-labelledby="hero-h"${h.bg ? ` style="background:${esc(h.bg)}"` : ''}>
   <div class="hero-txt">
     ${h.eyebrow ? `<div class="eyebrow">${esc(h.eyebrow)}</div>` : ''}
-    <h1 id="hero-h">${esc(h.title)}</h1>
+    <h1 id="hero-h"${/\n/.test(h.title) ? ' class="has-br"' : ''}>${esc(h.title).replace(/\r?\n/g, '<br>')}</h1>
     ${h.text ? `<p>${esc(h.text)}</p>` : ''}
     <div class="ctas">${heroBtn(h.cta1, '')}${heroBtn(h.cta2, ' ghost')}</div>
   </div>
@@ -185,17 +185,23 @@ function heroHTML() {
 /* ---------- inicio ---------- */
 function pageHome() {
   const best = (D.featured || []).map(P).filter(Boolean).slice(0, 8);
+  const gomitas = D.products.filter(p => p.cat === 'Gomitas saludables').slice(0, 4);
   return {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
 ${heroHTML()}
-<div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Paga con ${esc(payNames())}</div><div>↺ Cambios hasta 7 días</div></div>
+<div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Pagos seguros</div></div>
 <section class="section" aria-labelledby="h-cat">
   <h2 class="sec-title" id="h-cat">Compra por categoría</h2>
   <div class="cat-grid">${D.catOrder.map(c => `<a class="cat-card" href="${catHref(c)}">
     <div class="ph" style="background:${D.catTone[c]}">${catIcon(c)}</div>
     <div class="nm">${esc(c)}</div><div class="sb">${esc(D.catSub[c])}</div></a>`).join('')}</div>
 </section>
+${gomitas.length ? `<section class="section s48 gom-band" aria-labelledby="h-gom">
+  <div class="sec-head"><h2 class="sec-title" id="h-gom">Gomitas Saludables</h2><a class="link" href="${catHref('Gomitas saludables')}">Ver todo →</a></div>
+  <a class="gom-banner" href="${catHref('Gomitas saludables')}"><img src="img/banner_gomitas.webp" width="1734" height="907" alt="Una familia disfruta de las gomitas saludables" loading="lazy"></a>
+  <div class="prod-grid">${gomitas.map(p => card(p)).join('')}</div>
+</section>` : ''}
 <section class="section s48" aria-labelledby="h-best">
   <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="#/mas-vendidos">Ver todo →</a></div>
   <div class="prod-grid">${best.map(p => card(p, true)).join('')}</div>
@@ -366,11 +372,11 @@ function pageProduct(id) {
       <div class="buy-row desk">${qtyCtl()}<button class="btn" data-act="pdp-add">Agregar al carrito</button></div>
       <button class="btn ghost" data-act="pdp-buy">Comprar ahora</button>
       <button class="btn wa" data-act="wa" data-msg="${esc('Hola Angie, me interesa: ' + p.name)}">💬 Consultar por WhatsApp</button>
-      <div class="perks">🚚 Lima 2–4 días · provincias 4–7 días<br>↺ Cambios hasta 7 días<br>✔ Disponible</div>
+      <div class="perks">🚚 Lima 2–4 días · provincias 4–7 días<br>✔ Disponible</div>
       <div class="acc">
         <details open><summary>Descripción</summary><p>${esc(p.desc)}</p></details>
         ${p.care ? `<details><summary>Medidas y cuidados</summary><p>${esc(p.care)}</p></details>` : ''}
-        <details><summary>Envíos y cambios</summary><p>Delivery en Lima en 2–4 días hábiles y a provincias en 4–7 días. Cambios hasta 7 días después de recibir tu pedido.</p></details>
+        <details><summary>Envíos</summary><p>Delivery en Lima en 2–4 días hábiles y a provincias en 4–7 días.</p></details>
       </div>
     </div>
   </div>
@@ -389,6 +395,21 @@ function syncPDP() {
   const m = $('#main-pic'), g = pics(P(currentProductId()) || {});
   if (m && g[ui.pdp.img]) m.src = g[ui.pdp.img];
 }
+/* deslizar horizontalmente la foto principal para cambiar de foto */
+let swipe = null;
+document.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  swipe = e.target.closest('#main-img') && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!swipe || !ui.pdp) return;
+  const t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+  swipe = null;
+  if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  const n = $$('.dots button').length;
+  ui.pdp.img = Math.max(0, Math.min(n - 1, ui.pdp.img + (dx < 0 ? 1 : -1)));
+  syncPDP();
+}, { passive: true });
 function currentProductId() { return +parseHash()[1]; }
 
 /* ---------- carrito (página) ---------- */
@@ -549,7 +570,7 @@ function checkoutView() {
       <section class="co-card" aria-label="Detalles adicionales">
         ${fld('notes')}
         <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-        <label class="chk-line"><input type="checkbox" data-co-check="agree" id="agree"${st.agree ? ' checked' : ''}> Acepto los términos, la política de privacidad y la política de cambios</label>
+        <label class="chk-line"><input type="checkbox" data-co-check="agree" id="agree"${st.agree ? ' checked' : ''}> Acepto los términos y la política de privacidad</label>
         <div class="fld ${st.err.agree ? 'err' : ''}"><div class="msg" id="e-agree" role="alert">${st.err.agree ? esc(st.err.agree) : ''}</div></div></section>
       <div class="form-err" id="co-err" role="alert"></div>
       <button class="btn block big" type="submit" id="co-submit">Confirmar pedido · ${fmt(t.total)}</button>
