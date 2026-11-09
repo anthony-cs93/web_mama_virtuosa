@@ -168,13 +168,18 @@ const isPodcastLink = l => /^#\/podcast/.test(l || '');
 const SOON_TAG = '<small class="soon-tag">Próximamente</small>';
 const safeLink = l => (/^(#|\/|https?:\/\/)/.test(l || '') ? l : '#/');
 const heroBtn = (b, cls) => b && b.label && SOON && isPodcastLink(b.link) ? `<span class="btn${cls} soon" aria-disabled="true">🎙 Podcast ${SOON_TAG}</span>` : b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
+/* Título de la portada: variante de escritorio y, si existe, una de celular (≤900 px). Cada una con su salto de línea y su tamaño (px) */
+const heroTitle = (t, cls) => `<span class="${cls}${/\n/.test(t) ? ' has-br' : ''}">${esc(t).replace(/\r?\n/g, '<br>')}</span>`;
+const px = (v, lo, hi) => { const n = Math.round(+v); return n >= lo && n <= hi ? n : 0; };
 function heroHTML() {
   const h = activeHero();
+  const sd = px(h.titleSize, 24, 140), sm = px(h.titleSizeM, 20, 80), tm = (h.titleM || '').trim();
+  const style = (h.bg ? `background:${esc(h.bg)};` : '') + (sd ? `--ts-d:${sd}px;` : '') + (sm ? `--ts-m:${sm}px;` : '');
   const img = h.img ? `<img src="${esc(h.img)}"${h.imgM ? ` srcset="${esc(h.imgM)} 800w, ${esc(h.img)} 1600w" sizes="(max-width:900px) 100vw, 50vw"` : ''} width="1600" height="900" alt="${esc(h.alt || '')}" fetchpriority="high"${h.pos ? ` style="object-position:${esc(h.pos)}"` : ''}>` : '';
-  return `<section class="hero" aria-labelledby="hero-h"${h.bg ? ` style="background:${esc(h.bg)}"` : ''}>
+  return `<section class="hero" aria-labelledby="hero-h"${style ? ` style="${style}"` : ''}>
   <div class="hero-txt">
     ${h.eyebrow ? `<div class="eyebrow">${esc(h.eyebrow)}</div>` : ''}
-    <h1 id="hero-h"${/\n/.test(h.title) ? ' class="has-br"' : ''}>${esc(h.title).replace(/\r?\n/g, '<br>')}</h1>
+    <h1 id="hero-h">${tm ? heroTitle(h.title, 't-d') + heroTitle(tm, 't-m') : heroTitle(h.title, '')}</h1>
     ${h.text ? `<p>${esc(h.text)}</p>` : ''}
     <div class="ctas">${heroBtn(h.cta1, '')}${heroBtn(h.cta2, ' ghost')}</div>
   </div>
@@ -185,8 +190,8 @@ function heroHTML() {
 /* ---------- inicio ---------- */
 function pageHome() {
   const best = (D.featured || []).map(P).filter(Boolean).slice(0, 8);
-  const gomitas = D.products.filter(p => p.cat === 'Gomitas saludables').slice(0, 4);
-  const ropita = D.products.filter(p => p.cat === 'Ropa infantil').slice(0, 4);
+  const gomitas = D.products.filter(p => p.cat === 'Gomitas saludables').slice(0, 8);
+  const ropita = D.products.filter(p => p.cat === 'Ropa infantil').slice(0, 8);
   return {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
