@@ -1289,7 +1289,7 @@ async function loadOrders() {
 }
 async function renderOrders() {
   view.innerHTML = `<div class="sec-head"><div><h1>Pedidos</h1><p class="muted">Los cambios de estado se guardan al instante.</p></div>
-    <button class="btn ghost sm" data-act="o-refresh">${ic('refresh')} Actualizar</button></div><div id="o-box">${ORD ? '' : '<p class="muted">Cargando pedidos…</p>'}</div>`;
+    <div class="r"><button class="btn ghost sm" data-act="o-refresh">${ic('refresh')} Actualizar</button><button class="btn sm" data-act="o-new">${ic('plus')} Agregar pedido</button></div></div><div id="o-box">${ORD ? '' : '<p class="muted">Cargando pedidos…</p>'}</div>`;
   if (ORD) drawOrders(); // ya se cargó al entrar al panel: se muestra al instante y se actualiza detrás
   try { await loadOrders(); } catch (e) { if (ORD) toast(e.message, true); else $('#o-box').innerHTML = `<p class="form-err">${esc(e.message)}</p>`; return; }
   drawOrders();
@@ -1372,7 +1372,7 @@ function renderOrderDialog(o) {
   odlg.innerHTML = `<div class="dlg-head"><h2 id="ord-t">${esc(o.code)} <span class="o-st s-${o.status}">${O_STATUS[o.status]}</span></h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
   <div class="dlg-body" data-code="${esc(o.code)}">
     ${o.status === 'cancelled' && o.cancelledAt ? `<div class="o-gone-box">${ic('trash')}<span>Pedido cancelado. Se conservará hasta el <b>${esc(goneDate(o.cancelledAt))}</b> (${esc(goneIn(o.cancelledAt).toLowerCase())}) y después se eliminará junto con su comprobante.</span></div>` : ''}
-    <section class="o-sec"><h3>Cliente</h3>${line('Nombre', c.name)}${line('Celular', c.phone)}${line('Correo', c.email)}
+    <section class="o-sec"><h3>Cliente</h3>${line('Fecha del pedido', new Date(o.createdAt).toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' }))}${line('Nombre', c.name)}${line('Celular', c.phone)}${line('Correo', c.email)}
       ${o.doc ? line(o.doc.type === 'boleta' ? 'Boleta · DNI' : 'Factura · RUC', o.doc.type === 'boleta' ? o.doc.dni : `${o.doc.ruc} · ${o.doc.razon}`) : ''}${line('Nota del cliente', o.notes)}</section>
     <section class="o-sec"><h3>Entrega</h3>${line('Modalidad', d.label + (d.eta ? ' · ' + d.eta : ''))}
       ${d.ship === 'pick' ? '' : line('Dirección', [a.dir, a.ref && '(' + a.ref + ')', a.distrito, a.prov !== a.distrito ? a.prov : '', a.depto !== a.prov ? a.depto : ''].filter(Boolean).join(', '))}</section>
@@ -1454,3 +1454,78 @@ function ordClick(b, act) {
 /* ---------- arranque ---------- */
 boot().catch(err => { bootOff(); document.body.insertAdjacentHTML('afterbegin', `<p style="padding:20px">No se pudo conectar con el panel (${esc(err.message)}). Revisa que la web esté desplegada en Vercel (o corriendo con <code>vercel dev</code>).</p>`); });
 })();
+  if (act === 'o-new') return openNewOrder();
+}
+
+/* ---------- agregar un pedido a mano (ventas por WhatsApp, redes o en persona) ---------- */
+const todayLocal = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+function openNewOrder() {
+  const d = D(), pay = S.config.pay || {};
+  const prods = d.products.filter(p => p.active !== false);
+  const ships = Object.entries(d.shipping || {}).filter(([, z]) => z.on !== false);
+  const dists = (d.districts || []).filter(x => x.ship && x.cost !== null);
+  const prodOpts = prods.map(p => `<option value="${p.id}">${esc(p.name)} — ${fmt(p.price)}</option>`).join('');
+  const payOpts = Object.keys(O_PAY).filter(k => !pay[k] || pay[k].on !== false).map(k => `<option value="${k}">${O_PAY[k]}</option>`).join('');
+  odlg.setAttribute('aria-labelledby', 'onew-t');
+  odlg.innerHTML = `<form id="onew" novalidate>
+    <div class="dlg-head"><h2 id="onew-t">Agregar pedido</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
+    <div class="dlg-body">
+      <section class="o-sec"><h3>Cliente</h3><div class="grid2">
+        <label class="fld"><span>Nombre completo *</span><input type="text" name="name" maxlength="80" autocomplete="off" placeholder="Ej. María Pérez"></label>
+        <label class="fld"><span>Celular (9 dígitos) *</span><input name="phone" type="tel" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="987 654 321"></label>
+        <label class="fld"><span>Correo <small>(opcional)</small></span><input name="email" type="email" maxlength="120" autocomplete="off" placeholder="correo@ejemplo.com"></label></div></section>
+      <section class="o-sec"><h3>Productos</h3><div id="onew-lines"></div>
+        <button type="button" class="btn ghost sm" data-nact="add-line">${ic('plus')} Agregar producto</button></section>
+      <section class="o-sec"><h3>Entrega</h3><div class="grid2">
+        <label class="fld"><span>Modalidad *</span><select name="ship">${ships.map(([k, z]) => `<option value="${k}">${esc(z.l)}${z.p ? ' — ' + fmt(z.p) : ''}</option>`).join('')}</select></label>
+        <label class="fld" data-for="lima"><span>Distrito *</span><select name="distrito-lima"><option value="">Elige un distrito</option>${dists.map(x => `<option value="${esc(x.name)}">${esc(x.name)} — ${fmt(x.cost)}</option>`).join('')}</select></label>
+        <label class="fld" data-for="prov"><span>Departamento *</span><input type="text" name="depto" maxlength="60" placeholder="Ej. Arequipa"></label>
+        <label class="fld" data-for="prov"><span>Provincia *</span><input type="text" name="prov" maxlength="60" placeholder="Ej. Arequipa"></label>
+        <label class="fld" data-for="prov"><span>Distrito *</span><input type="text" name="distrito-prov" maxlength="60" placeholder="Ej. Cayma"></label>
+        <label class="fld" data-for="lima prov"><span>Dirección o agencia *</span><input type="text" name="dir" maxlength="160" placeholder="Calle, número, depto."></label>
+        <label class="fld" data-for="lima prov"><span>Referencia <small>(opcional)</small></span><input type="text" name="ref" maxlength="160" placeholder="Ej. frente al parque"></label></div></section>
+      <section class="o-sec"><h3>Pago y estado</h3><div class="grid2">
+        <label class="fld"><span>Fecha del pedido</span><input type="date" name="createdAt" value="${todayLocal()}" max="${todayLocal()}"></label>
+        <label class="fld"><span>Medio de pago</span><select name="pay">${payOpts}</select></label>
+        <label class="fld"><span>Estado inicial</span><select name="status">${Object.entries(O_STATUS).filter(([k]) => k !== 'cancelled').map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+        <label class="fld"><span>Cupón <small>(opcional)</small></span><input type="text" name="coupon" maxlength="24" autocomplete="off" placeholder="Código"></label>
+        <label class="fld"><span>Nota <small>(opcional)</small></span><input type="text" name="notes" maxlength="300" autocomplete="off" placeholder="Algo que debamos recordar"></label></div></section>
+      <p class="muted small" style="margin:0">Los precios, el envío, los paquetes y el cupón los calcula el sistema igual que en la tienda. Este pedido no envía avisos por correo.</p>
+      <div class="form-err" id="onew-err" role="alert"></div>
+    </div>
+    <div class="dlg-foot"><div class="r"></div><div class="r"><button type="button" class="btn ghost" data-close>Cancelar</button><button type="submit" class="btn" id="onew-ok">Crear pedido</button></div></div></form>`;
+  const f = $('#onew', odlg);
+  const addLine = () => {
+    const row = document.createElement('div'); row.className = 'onew-line';
+    row.innerHTML = `<select data-l="prod" aria-label="Producto">${prodOpts}</select><select data-l="opt" aria-label="Opción" hidden></select>
+      <input data-l="qty" type="number" min="1" max="10" value="1" aria-label="Cantidad"><button type="button" class="icon-btn" data-nact="rm-line" aria-label="Quitar producto">${ic('x')}</button>`;
+    $('#onew-lines', f).append(row); syncLine(row);
+  };
+  const syncLine = row => {
+    const p = prods.find(x => x.id === +$('[data-l=prod]', row).value), o = $('[data-l=opt]', row);
+    const has = p && p.opt && p.opt.values && p.opt.values.length;
+    o.hidden = !has; o.innerHTML = has ? p.opt.values.map(v => `<option value="${esc(v)}">${esc(p.opt.label)}: ${esc(v)}</option>`).join('') : '';
+  };
+  const syncShip = () => { const k = f.elements.ship.value; $$('[data-for]', f).forEach(l => { l.hidden = !l.dataset.for.split(' ').includes(k); }); };
+  f.addEventListener('change', e => { if (e.target.dataset.l === 'prod') syncLine(e.target.closest('.onew-line')); if (e.target.name === 'ship') syncShip(); });
+  f.addEventListener('click', e => {
+    const b = e.target.closest('[data-nact]'); if (!b) return;
+    if (b.dataset.nact === 'add-line') addLine();
+    if (b.dataset.nact === 'rm-line' && $$('.onew-line', f).length > 1) b.closest('.onew-line').remove();
+  });
+  f.addEventListener('submit', async e => {
+    e.preventDefault();
+    const g = n => f.elements[n] ? f.elements[n].value.trim() : '', ship = g('ship'), err = $('#onew-err', f), ok = $('#onew-ok', f);
+    const items = $$('.onew-line', f).map(r => ({ id: +$('[data-l=prod]', r).value, opt: $('[data-l=opt]', r).hidden ? null : $('[data-l=opt]', r).value, qty: +$('[data-l=qty]', r).value }));
+    const body = { name: g('name'), phone: g('phone').replace(/\s/g, ''), email: g('email'), items, ship, pay: g('pay'), status: g('status'), createdAt: f.elements.createdAt.value, coupon: g('coupon'), notes: g('notes'),
+      address: ship === 'lima' ? { distrito: g('distrito-lima'), dir: g('dir'), ref: g('ref') } : ship === 'prov' ? { depto: g('depto'), prov: g('prov'), distrito: g('distrito-prov'), dir: g('dir'), ref: g('ref') } : {} };
+    err.textContent = ''; ok.disabled = true; ok.setAttribute('aria-busy', 'true');
+    try {
+      const r = await api('POST', '/api/orders-admin?op=create', body);
+      ORDF[r.order.code] = r.order; syncSummary(r.order); renderOrderDialog(r.order);
+      toast('Pedido ' + r.order.code + ' creado');
+    } catch (ex) { err.textContent = ex.message; ok.disabled = false; ok.removeAttribute('aria-busy'); }
+  });
+  addLine(); syncShip();
+  odlg.showModal();
+  f.elements.name.focus();
