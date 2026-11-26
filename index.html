@@ -25,6 +25,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Sacramento&display=swap" rel="stylesheet">
+  <base href="/">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -35,7 +36,7 @@
 
   <header class="top">
     <button class="icon-btn menu-btn" data-act="drawer-open" aria-label="Abrir menú" aria-controls="drawer" aria-expanded="false">☰</button>
-    <a class="logo" href="#/" aria-label="Mamá Virtuosa, ir al inicio">
+    <a class="logo" href="/" aria-label="Mamá Virtuosa, ir al inicio">
       <img src="img/mama_virtuosa_logo.png" alt="Mamá Virtuosa" width="500" height="100">
     </a>
     <form class="search" id="search-form" role="search" autocomplete="off">
@@ -43,8 +44,8 @@
       <input id="search-input" type="search" name="q" placeholder="Buscar brochas, vestidos, gomitas…" aria-label="Buscar productos">
     </form>
     <button class="icon-btn search-btn" data-act="search-toggle" aria-label="Buscar" aria-expanded="false">⌕</button>
-    <a class="account" href="#/pedidos">Mis pedidos</a>
-    <a class="cart-btn" href="#/carrito" aria-label="Carrito">
+    <a class="account" href="/pedidos">Mis pedidos</a>
+    <a class="cart-btn" href="/carrito" aria-label="Carrito">
       <svg class="cart-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.2a1.5 1.5 0 0 1-1.5 1.3H7.7a1.5 1.5 0 0 1-1.5-1.3z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg><span class="cart-txt">Carrito</span>
       <span class="badge" id="cart-count" aria-live="polite">0</span>
     </a>
@@ -65,16 +66,16 @@
       </div>
       <div>
         <b>Tienda</b>
-        <a href="#/categoria/Belleza">Belleza</a>
-        <a href="#/categoria/Beb%C3%A9%20y%20ni%C3%B1os">Bebé y niños</a>
-        <a href="#/categoria/Ropa%20infantil">Ropa infantil</a>
-        <a href="#/categoria/Gomitas%20saludables">Gomitas</a>
+        <a href="/categoria/Belleza">Belleza</a>
+        <a href="/categoria/Beb%C3%A9%20y%20ni%C3%B1os">Bebé y niños</a>
+        <a href="/categoria/Ropa%20infantil">Ropa infantil</a>
+        <a href="/categoria/Gomitas%20saludables">Gomitas</a>
       </div>
       <div>
         <b>Ayuda</b>
-        <a href="#/ayuda/envios">Envíos</a>
+        <a href="/ayuda/envios">Envíos</a>
         <a href="#" data-act="wa">Contacto</a>
-        <a class="foot-podcast" href="#/podcast">Podcast</a>
+        <a class="foot-podcast" href="/podcast">Podcast</a>
       </div>
       <div>
         <b>Newsletter</b>

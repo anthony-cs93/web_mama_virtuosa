@@ -10,7 +10,7 @@ const fmt = n => 'S/ ' + n.toFixed(2);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const P = id => D.products.find(p => p.id === id);
 const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-const catHref = (c, s) => '#/categoria/' + encodeURIComponent(c) + (s ? '/' + encodeURIComponent(s) : '');
+const catHref = (c, s) => '/categoria/' + encodeURIComponent(c) + (s ? '/' + encodeURIComponent(s) : '');
 const mmss = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const store = {
   get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } },
@@ -177,9 +177,9 @@ const imgOrLabel = (p, label) => pics(p).length
 
 /* Botón flotante sobre la foto (aparece al pasar el mouse o con el teclado). Si el producto tiene talla o color, lleva a su página para elegir */
 const quickAdd = p => `<div class="qa">${p.opt && p.opt.values && p.opt.values.length
-  ? `<a class="quick-add" href="#/producto/${p.id}">Elegir opciones</a>`
+  ? `<a class="quick-add" href="/producto/${p.id}">Elegir opciones</a>`
   : `<button type="button" class="quick-add" data-act="quick-add" data-id="${p.id}" aria-label="Agregar ${esc(p.name)} al carrito">Agregar al carrito</button>`}</div>`;
-const card = (p, withCat) => `<div class="card-wrap"><a class="card" href="#/producto/${p.id}">
+const card = (p, withCat) => `<div class="card-wrap"><a class="card" href="/producto/${p.id}">
   <div class="ph${pics(p).length ? ' has-img' : ''}" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${pics(p)[1] ? `<img class="alt" src="${esc(pics(p)[1])}" alt="" loading="lazy">` : ''}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
   <div class="nm">${esc(p.name)}</div>${withCat ? `<div class="ct">${esc(p.cat)}</div>` : ''}
   <div class="pr"><b>${fmt(p.price)}</b>${p.old ? ` <s>${fmt(p.old)}</s>` : ''}</div></a>${quickAdd(p)}</div>`;
@@ -215,16 +215,16 @@ const catIcon = c => { const u = CAT_ICONS[c] || CAT_ICON_DEFAULT; return `<span
 const DEFAULT_HERO = {
   eyebrow: 'Nueva colección', title: 'Todo para mamá\ny sus peques',
   text: 'Belleza, básicos para niños, ropa, gomitas saludables y un podcast para acompañarte en la crianza.',
-  cta1: { label: 'Comprar ahora', link: '#/categoria/Belleza' }, cta2: { label: '▶ Escuchar podcast', link: '#/podcast' },
+  cta1: { label: 'Comprar ahora', link: '/categoria/Belleza' }, cta2: { label: '▶ Escuchar podcast', link: '/podcast' },
   img: 'img/hero.jpg', imgM: 'img/hero-m.jpg', alt: 'Una mamá sonríe a su hija mientras le acomoda el cabello en un cuarto luminoso', pos: '60% 30%', bg: ''
 };
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const heroLive = h => h && h.active !== false && (!h.start || h.start <= todayStr()) && (!h.end || h.end >= todayStr());
 const activeHero = () => (D.heroes || []).find(heroLive) || { ...DEFAULT_HERO, ...(D.hero || {}) };
 const SOON = C.podcastSoon !== false;   // Podcast "Próximamente"; poner podcastSoon:false en la configuración para activarlo
-const isPodcastLink = l => /^#\/podcast/.test(l || '');
+const isPodcastLink = l => /^#?\/podcast/.test(l || '');
 const SOON_TAG = '<small class="soon-tag">Próximamente</small>';
-const safeLink = l => (/^(#|\/|https?:\/\/)/.test(l || '') ? l : '#/');
+const safeLink = l => (/^(#|\/|https?:\/\/)/.test(l || '') ? String(l).replace(/^#\//, '/') : '/');
 const heroBtn = (b, cls) => b && b.label && SOON && (isPodcastLink(b.link) || /podcast/i.test(b.label)) ? `<span class="btn${cls} soon hover-soon" aria-disabled="true"><span class="a">${esc(b.label)}</span><span class="b">Próximamente</span></span>` : b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
 /* Título de la portada: variante de escritorio y, si existe, una de celular (≤900 px). Cada una con su salto de línea y su tamaño (px) */
 const heroTitle = (t, cls) => `<span class="${cls}${/\n/.test(t) ? ' has-br' : ''}">${esc(t).replace(/\r?\n/g, '<br>')}</span>`;
@@ -277,7 +277,7 @@ ${gomitas.length ? bandSection('Gomitas saludables', 'gom', 'Gomitas Saludables'
 ${D.catOrder.includes('Belleza') ? bandSection('Belleza', 'bel', 'Belleza', belleza) : ''}
 ${D.catOrder.includes('Ropa infantil') ? bandSection('Ropa infantil', 'rop', 'Ropita infantil', ropita) : ''}
 <section class="section s48" aria-labelledby="h-best">
-  <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="#/mas-vendidos">Ver todo →</a></div>
+  <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="/mas-vendidos">Ver todo →</a></div>
   <div class="prod-grid">${best.map(p => card(p, true)).join('')}</div>
 </section>
 <section class="podcast-band" aria-labelledby="h-pod">
@@ -285,8 +285,8 @@ ${D.catOrder.includes('Ropa infantil') ? bandSection('Ropa infantil', 'rop', 'Ro
   <div>
     <div class="eyebrow">Podcast Mamá Virtuosa</div>
     ${SOON ? `<h2 id="h-pod">Próximamente</h2><p class="soon-note">Estamos preparando los primeros episodios. ¡Muy pronto podrás escucharlos aquí!</p>` : `<h2 id="h-pod">Últimos episodios</h2>
-    <div class="ep-mini">${D.episodes.slice(0, 3).map(e => `<a href="#/podcast"><span class="dot-play" aria-hidden="true">▶</span><span><b>${esc(e.t)}</b><small>${esc(e.meta)}</small></span></a>`).join('')}</div>
-    <a class="band-link" href="#/podcast">Ver todos los episodios →</a>`}
+    <div class="ep-mini">${D.episodes.slice(0, 3).map(e => `<a href="/podcast"><span class="dot-play" aria-hidden="true">▶</span><span><b>${esc(e.t)}</b><small>${esc(e.meta)}</small></span></a>`).join('')}</div>
+    <a class="band-link" href="/podcast">Ver todos los episodios →</a>`}
   </div>
 </section>
 <div class="home-end"></div>`
@@ -328,7 +328,7 @@ function updateGrid(pending) {
   grid.innerHTML = list.length ? list.map(p => card(p)).join('') :
     `<div class="empty"><div class="script">${pending ? 'Pronto sumaremos “' + esc(pending) + '”' : !F.base.length ? 'Aún no hay productos' : 'No encontramos productos'}</div>
      <p>${pending || !F.base.length ? 'Estamos preparando esta sección. ¡Muy pronto habrá novedades!' : 'Prueba quitando algún filtro.'}</p>
-     <a class="btn" href="#/">Volver al inicio</a></div>`;
+     <a class="btn" href="/">Volver al inicio</a></div>`;
   $$('[data-f=quick]').forEach(i => { i.checked = F.quick === i.value; });
   $$('[data-f=sub]').forEach(i => { i.checked = F.subs.has(i.value); });
   $$('[data-f=fopt]').forEach(i => { i.checked = F.sel[i.dataset.fid].has(i.value); });
@@ -408,22 +408,22 @@ function pageCategory(cat, seg) {
   const crumb = preset ? preset.value : (seg && !/^f~/.test(seg) ? seg : null);
   return listPage({
     title: crumb || cat,
-    crumbList: [['Inicio', '#/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
+    crumbList: [['Inicio', '/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
     base, filters, preset, quick: QUICK[cat] || [], bannerCat: cat, pending: crumb && !preset ? crumb : null
   });
 }
 /* «Ver todo» de «Más vendidos» del inicio: los mismos productos destacados desde el panel, en el orden elegido */
 function pageBest() {
   const base = (D.featured || []).map(P).filter(Boolean);
-  return listPage({ title: 'Más vendidos', crumbList: [['Inicio', '#/'], ['Más vendidos']], base, rank: base.map(p => p.id) });
+  return listPage({ title: 'Más vendidos', crumbList: [['Inicio', '/'], ['Más vendidos']], base, rank: base.map(p => p.id) });
 }
 function pageOffers() {
-  return listPage({ title: 'Ofertas', crumbList: [['Inicio', '#/'], ['Ofertas']], base: D.products.filter(p => p.old) });
+  return listPage({ title: 'Ofertas', crumbList: [['Inicio', '/'], ['Ofertas']], base: D.products.filter(p => p.old) });
 }
 function pageSearch(q) {
   const words = norm(q).split(/\s+/).filter(Boolean);
   const base = D.products.filter(p => { const h = norm(p.name + ' ' + p.cat + ' ' + p.sub); return words.every(w => h.includes(w)); });
-  return listPage({ title: 'Resultados para “' + q + '”', crumbList: [['Inicio', '#/'], ['Búsqueda']], base });
+  return listPage({ title: 'Resultados para “' + q + '”', crumbList: [['Inicio', '/'], ['Búsqueda']], base });
 }
 
 /* Oferta de paquetes en la página de una gomita suelta */
@@ -445,7 +445,7 @@ function pageProduct(id) {
   const qtyCtl = cls => `<div class="qty ${cls || ''}"><button type="button" data-act="pdp-qty" data-d="-1" aria-label="Menos">–</button><output data-qty-out aria-live="polite">1</output><button type="button" data-act="pdp-qty" data-d="1" aria-label="Más">+</button></div>`;
   const html = `
 <div class="pdp">
-  ${crumbs([['Inicio', '#/'], [p.cat, catHref(p.cat)], [p.name]])}
+  ${crumbs([['Inicio', '/'], [p.cat, catHref(p.cat)], [p.name]])}
   <div class="pdp-grid">
     <div class="thumbs">
       ${Array.from({ length: n }, (_, i) => `<button class="thumb ph${gal[i] ? ' has-img' : ''}" data-act="pdp-img" data-i="${i}" style="background:${p.tone}" aria-label="Ver foto ${i + 1}">${gal[i] ? `<img src="${esc(gal[i])}" alt="">` : ''}</button>`).join('')}
@@ -532,7 +532,7 @@ function cartView() {
   const pct = Math.min(100, t.net / (C.freeShippingFrom || 1) * 100).toFixed(0);
   let body;
   if (!cart.length) {
-    body = `<div class="empty-cart"><div class="script">Tu carrito está vacío</div><a class="btn" href="#/">Seguir comprando</a></div>`;
+    body = `<div class="empty-cart"><div class="script">Tu carrito está vacío</div><a class="btn" href="/">Seguir comprando</a></div>`;
   } else {
     body = `<div class="cart-grid">
   <div>
@@ -540,11 +540,11 @@ function cartView() {
     ${packBanner()}
     <div class="lines">${cart.map((l, i) => { const p = P(l.id), cap = maxQty(p); return `<div class="line">
       <div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
-      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u${p.old > p.price ? ` <s>${fmt(p.old)}</s>` : ''}</div>
+      <div><a class="nm" href="/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u${p.old > p.price ? ` <s>${fmt(p.old)}</s>` : ''}</div>
         <button class="link ul" data-act="line-rm" data-i="${i}">Quitar</button></div>
       <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos" ${l.qty <= 1 ? 'disabled' : ''}>–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más" ${l.qty >= cap ? 'disabled' : ''}>+</button></div>
       <div class="tot">${p.old > p.price ? `<s class="was">${fmt(p.old * l.qty)}</s>` : ''}${fmt(p.price * l.qty)}</div></div>`; }).join('')}</div>
-    <a class="link" href="#/" style="display:inline-block;margin-top:18px">← Seguir comprando</a>
+    <a class="link" href="/" style="display:inline-block;margin-top:18px">← Seguir comprando</a>
   </div>
   <aside class="summary" aria-label="Resumen">
     <h2>Resumen</h2>
@@ -556,7 +556,7 @@ function cartView() {
     <div class="srow"><span>Envío</span><span class="muted">se calcula al pagar</span></div>
     <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
     ${t.savings + t.bundle + t.disc > 0 ? `<div class="save-note">¡Ahorras ${fmt(r2(t.savings + t.bundle + t.disc))} en esta compra!</div>` : ''}
-    <a class="btn block" href="#/checkout">Finalizar compra</a>
+    <a class="btn block" href="/checkout">Finalizar compra</a>
     <div class="safe">${esc(payLine())}</div>
   </aside>
 </div>`;
@@ -662,7 +662,7 @@ function checkoutView() {
   const payEntries = payKeys().map(k => ({ k, l: PAY_META[k].l, s: PAY_META[k].s, price: k === 'card' && surchargePct() > 0 ? '+' + surchargePct() + '%' : '' }));
   const mSum = `<details class="sum-m"><summary><span>Resumen del pedido (${t.count})</span><b>${fmt(t.total)} ⌄</b></summary><div class="in">${summaryHTML(true)}</div></details>`;
   return `<div class="co-page"><h1 class="sr">Finalizar compra</h1>
-    <a class="link" href="#/carrito">← Volver al carrito</a>
+    <a class="link" href="/carrito">← Volver al carrito</a>
     <div style="height:18px"></div>${mSum}
     <div class="co-grid"><form class="form" data-form="order" novalidate>
       <section class="co-card" aria-labelledby="h-datos"><h2 id="h-datos"><i>1</i>Tus datos</h2>
@@ -689,7 +689,7 @@ function checkoutView() {
     <aside class="summary co-side" aria-label="Resumen del pedido">${summaryHTML()}</aside></div></div>`;
 }
 function pageCheckout() {
-  if (!cart.length) { location.replace('#/carrito'); return null; }
+  if (!cart.length) { history.replaceState(null, '', '/carrito'); setTimeout(render); return null; }
   if (!shipOn(ui.co.ship)) ui.co.ship = shipKeys()[0] || ui.co.ship;
   return { title: 'Finalizar compra', html: checkoutView() };
 }
@@ -732,7 +732,7 @@ async function submitOrder(form) {
     try { sessionStorage.setItem('mv_fresh', r.code); } catch { /* sin almacenamiento */ }
     cart = []; coupon = null; ui.couponMsg = null; saveCart();
     st.agree = false; st.err = {}; st.f.notes = '';
-    location.hash = `#/pedido/${r.code}/${r.token}`;
+    go(`/pedido/${r.code}/${r.token}`);
   } catch (e) {
     setBusy(false);
     const box = $('#co-err'); box.textContent = e.message; box.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -801,7 +801,7 @@ function orderHTML(o, fresh) {
       <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
       <button class="btn wa block" data-act="wa" data-msg="${esc(orderWa(o, 'Tengo una consulta sobre mi pedido.'))}">💬 Consultar por WhatsApp</button>
       <button class="link" data-act="order-refresh">↻ Actualizar estado</button>
-      <a class="link" href="#/">← Seguir comprando</a>
+      <a class="link" href="/">← Seguir comprando</a>
     </aside></div>`;
 }
 let ordCtx = null, prefetched = null;
@@ -816,7 +816,7 @@ async function loadOrder(code, token, fresh) {
     o = j.order;
   } catch (e) {
     if ($('#ord-box') !== box) return;
-    box.innerHTML = `<div class="empty-cart"><div class="script">${esc(e instanceof TypeError ? 'No hay conexión' : e.message)}</div><p class="muted">Revisa el enlace de tu pedido o escríbenos por WhatsApp.</p><a class="btn" href="#/">Ir al inicio</a></div>`;
+    box.innerHTML = `<div class="empty-cart"><div class="script">${esc(e instanceof TypeError ? 'No hay conexión' : e.message)}</div><p class="muted">Revisa el enlace de tu pedido o escríbenos por WhatsApp.</p><a class="btn" href="/">Ir al inicio</a></div>`;
     return;
   }
   if ($('#ord-box') !== box) return;
@@ -832,8 +832,8 @@ function pageOrder(code, token) {
 function pageMyOrders() {
   const mine = store.get('mv_orders', []);
   return { title: 'Mis pedidos', html: `<div class="ord-page"><h1 class="script">Mis pedidos</h1>
-    ${mine.length ? `<p class="muted">Pedidos hechos desde este dispositivo.</p><div class="my-orders">${mine.map(o => `<a class="my-order" href="#/pedido/${esc(o.code)}/${esc(o.token)}"><b>${esc(o.code)}</b><span class="muted">${esc(new Date(o.at).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }))}</span><b>${fmt(o.total)}</b><span aria-hidden="true">→</span></a>`).join('')}</div>`
-      : `<div class="empty-cart"><div class="script">Aún no tienes pedidos aquí</div><p class="muted">Cuando compres, tu pedido aparecerá en esta lista. Si compraste desde otro dispositivo, usa el enlace que te dimos al confirmar.</p><a class="btn" href="#/">Ir a la tienda</a></div>`}</div>` };
+    ${mine.length ? `<p class="muted">Pedidos hechos desde este dispositivo.</p><div class="my-orders">${mine.map(o => `<a class="my-order" href="/pedido/${esc(o.code)}/${esc(o.token)}"><b>${esc(o.code)}</b><span class="muted">${esc(new Date(o.at).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric' }))}</span><b>${fmt(o.total)}</b><span aria-hidden="true">→</span></a>`).join('')}</div>`
+      : `<div class="empty-cart"><div class="script">Aún no tienes pedidos aquí</div><p class="muted">Cuando compres, tu pedido aparecerá en esta lista. Si compraste desde otro dispositivo, usa el enlace que te dimos al confirmar.</p><a class="btn" href="/">Ir a la tienda</a></div>`}</div>` };
 }
 async function sendProof(file) {
   const btn = $('#proof-btn'), o = ordCtx; if (!file || !o || !btn) return;
@@ -889,7 +889,7 @@ function togglePlay(i) {
 function pageEpisodesList() {
   const list = D.episodes.map((e, i) => ({ ...e, i })).filter(e => ui.topic === 'Todos' || e.topic === ui.topic);
   return list.map(e => `<div class="ep"><div class="cv"></div>
-    <div><h3>${esc(e.t)}</h3><div class="meta">${esc(e.meta)} · ${esc(e.topic)}</div>${P(e.prod) ? `<a href="#/producto/${e.prod}">Productos mencionados →</a>` : ''}</div>
+    <div><h3>${esc(e.t)}</h3><div class="meta">${esc(e.meta)} · ${esc(e.topic)}</div>${P(e.prod) ? `<a href="/producto/${e.prod}">Productos mencionados →</a>` : ''}</div>
     <button class="play" data-act="play" data-i="${e.i}" aria-pressed="false" aria-label="Reproducir ${esc(e.t)}">▶</button></div>`).join('') ||
     '<p class="muted" style="padding:24px 0">Aún no hay episodios en este tema.</p>';
 }
@@ -916,24 +916,24 @@ function pagePodcast() {
 
 function pagePodcastSoon() {
   return { title: 'Podcast · Próximamente', html: `<div class="empty-cart"><div class="eyebrow">Podcast</div><div class="script">Próximamente</div>
-    <p class="muted">Estamos preparando los primeros episodios.</p><a class="btn" href="#/">Ir al inicio</a></div>` };
+    <p class="muted">Estamos preparando los primeros episodios.</p><a class="btn" href="/">Ir al inicio</a></div>` };
 }
 
 /* ---------- ayuda / 404 ---------- */
 function pageHelp(k) {
   const h = D.help[k]; if (!h) return pageNotFound();
-  return { title: h.title, html: `<div class="help-page">${crumbs([['Inicio', '#/'], [h.title]])}<h1>${esc(h.title)}</h1>${h.body.map(t => `<p>${esc(t)}</p>`).join('')}
+  return { title: h.title, html: `<div class="help-page">${crumbs([['Inicio', '/'], [h.title]])}<h1>${esc(h.title)}</h1>${h.body.map(t => `<p>${esc(t)}</p>`).join('')}
     <button class="btn wa" data-act="wa" style="margin-top:12px">💬 Consultar por WhatsApp</button></div>` };
 }
 function pageNotFound() {
-  return { title: 'Página no encontrada', html: `<div class="empty-cart"><div class="script">No encontramos esta página</div><a class="btn" href="#/">Ir al inicio</a></div>` };
+  return { title: 'Página no encontrada', html: `<div class="empty-cart"><div class="script">No encontramos esta página</div><a class="btn" href="/">Ir al inicio</a></div>` };
 }
 
 /* ---------- navegación y megamenú ---------- */
-const parseHash = () => (location.hash.slice(1) || '/').split('?')[0].split('/').filter(Boolean).map(s => { try { return decodeURIComponent(s); } catch { return s; } });
+const parseHash = () => (location.pathname || '/').split('?')[0].split('/').filter(Boolean).map(s => { try { return decodeURIComponent(s); } catch { return s; } });
 function buildNav() {
   $('#nav-row').innerHTML = D.catOrder.map(c => `<a href="${catHref(c)}" data-mega="${esc(c)}" data-nav="${esc(c)}">${esc(c)} <span class="caret" aria-hidden="true">⌄</span></a>`).join('') +
-    (SOON ? `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>` : '<a href="#/podcast" data-nav="podcast">Podcast</a>') + '<a href="#/ofertas" class="offers" data-nav="ofertas">Ofertas</a>';
+    (SOON ? `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>` : '<a href="/podcast" data-nav="podcast">Podcast</a>') + '<a href="/ofertas" class="offers" data-nav="ofertas">Ofertas</a>';
 }
 function openMega(k) {
   const m = D.mega[k], box = $('#mega');
@@ -942,7 +942,7 @@ function openMega(k) {
   ui.mega = k;
   const p = m.promo && P(m.promo.id);
   box.innerHTML = m.cols.map(c => `<div><h3>${esc(c.t)}</h3><ul>${c.l.map(l => `<li><a href="${catHref(k, c.fid ? 'f~' + c.fid + '~' + l : l)}">${esc(l)}</a></li>`).join('')}</ul></div>`).join('') +
-    (!p ? '' : `<a class="promo-card" href="#/producto/${p.id}" style="background:${p.tone}"><div class="ph${pics(p).length ? ' has-img' : ''}" aria-hidden="true">${pics(p).length ? `<img src="${esc(pics(p)[0])}" alt="">` : '[foto destacada]'}</div>
+    (!p ? '' : `<a class="promo-card" href="/producto/${p.id}" style="background:${p.tone}"><div class="ph${pics(p).length ? ' has-img' : ''}" aria-hidden="true">${pics(p).length ? `<img src="${esc(pics(p)[0])}" alt="">` : '[foto destacada]'}</div>
       <div class="txt"><div class="eyebrow">Destacado</div><div class="name">${esc(p.name)}</div><div class="sub">${esc(m.promo.s)}</div></div></a>`);
   box.hidden = false;
   $$('#nav-row a').forEach(a => a.setAttribute('aria-expanded', a.dataset.mega === k ? 'true' : 'false'));
@@ -974,9 +974,9 @@ function buildDrawer() {
     return `<div class="d-item"><button data-act="d-acc" aria-expanded="false" aria-controls="ds-${i}"><span>${esc(c)}</span><span aria-hidden="true">⌄</span></button>
       <div class="d-sub" id="ds-${i}" hidden>${subs.map(s => `<a href="${catHref(c, s)}" data-act="drawer-close">${esc(s)}</a>`).join('')}<a href="${catHref(c)}" data-act="drawer-close"><b>Ver todo ${esc(c)}</b></a></div></div>`;
   }).join('') +
-    `<div class="d-item">${SOON ? `<span class="soon" aria-disabled="true">🎙 Podcast ${SOON_TAG}</span>` : '<a href="#/podcast" data-act="drawer-close">🎙 Podcast</a>'}</div>
-     <div class="d-item"><a href="#/ofertas" data-act="drawer-close" style="color:var(--plum)">Ofertas</a></div>
-     <div class="d-foot"><a href="#/pedidos" data-act="drawer-close">Mis pedidos</a><a href="#/ayuda/envios" data-act="drawer-close">Ayuda</a><a href="#" data-act="wa">WhatsApp</a></div>`;
+    `<div class="d-item">${SOON ? `<span class="soon" aria-disabled="true">🎙 Podcast ${SOON_TAG}</span>` : '<a href="/podcast" data-act="drawer-close">🎙 Podcast</a>'}</div>
+     <div class="d-item"><a href="/ofertas" data-act="drawer-close" style="color:var(--plum)">Ofertas</a></div>
+     <div class="d-foot"><a href="/pedidos" data-act="drawer-close">Mis pedidos</a><a href="/ayuda/envios" data-act="drawer-close">Ayuda</a><a href="#" data-act="wa">WhatsApp</a></div>`;
 }
 let drawerOpener = null;
 function openDrawer() {
@@ -1025,9 +1025,23 @@ function render(keepScroll) {
   if (!keepScroll) { scrollTo(0, 0); if (!firstRender) main.focus({ preventScroll: true }); } else scrollTo(0, y);
   firstRender = false;
 }
-window.addEventListener('hashchange', () => {
-  if (parseHash()[0] === 'checkout') { ui.couponMsg = null; }
+/* Rutas limpias (sin #): el historial del navegador se maneja con pushState */
+function go(path) {
+  if (path !== location.pathname + location.search) history.pushState(null, '', path);
+  if (parseHash()[0] === 'checkout') ui.couponMsg = null;
   render();
+}
+window.addEventListener('popstate', () => { if (parseHash()[0] === 'checkout') ui.couponMsg = null; render(); });
+window.addEventListener('hashchange', () => { if (/^#\//.test(location.hash)) { history.replaceState(null, '', location.hash.slice(1)); render(); } });   // enlaces antiguos con #
+/* Los enlaces internos no recargan la página */
+document.addEventListener('click', e => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest('a[href]');
+  if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+  const h = a.getAttribute('href');
+  if (!/^\/(?!\/)/.test(h) || /^\/(api|admin)(\/|$)/.test(h)) return;
+  e.preventDefault();
+  go(h);
 });
 
 /* ---------- acciones (clics) ---------- */
@@ -1056,12 +1070,12 @@ const actions = {
     const p = P(+el.dataset.id); if (!p) return;
     const capped = addToCart(p.id, null, 1);
     nudgeCart();
-    toast(capped ? 'Ya tienes el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '#/carrito', label: 'Ver carrito' });
+    toast(capped ? 'Ya tienes el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '/carrito', label: 'Ver carrito' });
   },
   'pdp-add'() {
     const capped = addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty);
     nudgeCart();
-    toast(capped ? 'Agregado. Es el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '#/carrito', label: 'Ver carrito' });
+    toast(capped ? 'Agregado. Es el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '/carrito', label: 'Ver carrito' });
   },
   'pack-add'(el) {
     const id = +el.dataset.id, n = +el.dataset.n || 1;
@@ -1070,7 +1084,7 @@ const actions = {
     render(true);
     if (capped) toast('Llegaste al máximo disponible de este producto');
   },
-  'pdp-buy'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); location.hash = '#/checkout'; },
+  'pdp-buy'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); go('/checkout'); },
   'line-qty'(el) { const l = cart[+el.dataset.i], p = P(l.id); l.qty = Math.max(1, Math.min(maxQty(p), l.qty + (+el.dataset.d))); saveCart(); rerenderKeepFocus(); },
   async 'line-rm'(el) {
     const l = cart[+el.dataset.i]; if (!l) return;
@@ -1142,7 +1156,7 @@ document.addEventListener('submit', e => {
   if (form.id === 'search-form') {
     e.preventDefault();
     const q = $('#search-input').value.trim();
-    if (q) location.hash = '#/buscar/' + encodeURIComponent(q);
+    if (q) go('/buscar/' + encodeURIComponent(q));
     return;
   }
   if (form.id === 'news-form') { e.preventDefault(); form.reset(); toast('¡Gracias por suscribirte!'); return; }
@@ -1160,5 +1174,6 @@ document.addEventListener('submit', e => {
 $('#year').textContent = new Date().getFullYear();
 buildNav(); buildDrawer();
 { const ig = $('#ig-link'), u = C.social && C.social.Instagram; if (ig && /^https?:\/\//.test(u || '')) ig.href = u.replace(/\/$/, ''); }
-if (SOON) { const f = $('.foot-podcast'); if (f) f.outerHTML = `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>`; } updateCartCount(); render();
+if (SOON) { const f = $('.foot-podcast'); if (f) f.outerHTML = `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>`; } if (/^#\//.test(location.hash)) history.replaceState(null, '', location.hash.slice(1));   // enlaces antiguos con #
+updateCartCount(); render();
 })();

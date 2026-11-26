@@ -34,6 +34,7 @@ createServer(async (req, res) => {
     let p = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
     if (!p || p.endsWith('/') || p.endsWith('\\')) p += 'index.html';
     if (p.includes('..') || /^(node_modules|api|\.git)([/\\]|$)/.test(p)) { res.statusCode = 404; return res.end(); }
+    if (!extname(p) && !/^(admin|img|css|js)(\/|\\|$)/.test(p)) p = 'index.html';   // rutas limpias de la tienda (/categoria/Belleza…)
     const file = join(ROOT, p);
     if (!extname(file) && (await stat(file).catch(() => null))?.isDirectory()) { res.statusCode = 301; res.setHeader('Location', url.pathname + '/' + url.search); return res.end(); }
     res.setHeader('Content-Type', TYPES[extname(file)] || 'application/octet-stream');

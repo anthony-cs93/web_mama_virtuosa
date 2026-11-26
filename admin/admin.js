@@ -1389,7 +1389,7 @@ function renderOrderDialog(o) {
   </div>
   <div class="dlg-foot"><div class="r">${o.status !== 'cancelled' ? '<button type="button" class="link red" data-act="o-cancel">Cancelar pedido</button>' : ''}</div>
     <div class="r"><a class="btn ghost sm" target="_blank" rel="noopener" href="https://wa.me/51${esc(c.phone)}?text=${encodeURIComponent(`Hola ${first}, te escribimos de Mamá Virtuosa por tu pedido ${o.code}.`)}">💬 WhatsApp al cliente</a>
-      <a class="btn ghost sm" target="_blank" rel="noopener" href="/#/pedido/${esc(o.code)}/${esc(o.token)}">Ver página del cliente ${ic('ext')}</a></div></div>`;
+      <a class="btn ghost sm" target="_blank" rel="noopener" href="/pedido/${esc(o.code)}/${esc(o.token)}">Ver página del cliente ${ic('ext')}</a></div></div>`;
   odlg.setAttribute('aria-labelledby', 'ord-t');
   if (!odlg.open) odlg.showModal();
 }

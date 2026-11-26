@@ -10,6 +10,9 @@
       "includeFiles": "data/store.json"
     }
   },
+  "rewrites": [
+    { "source": "/((?!api/|admin|img/|css/|js/|favicon\\.ico).*)", "destination": "/index.html" }
+  ],
   "crons": [
     { "path": "/api/orders-purge", "schedule": "0 8 * * *" }
   ]
