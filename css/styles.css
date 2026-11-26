@@ -129,9 +129,9 @@ main{flex:1;outline:none}
 .banner-txt h1{font:400 44px var(--script);margin:0;line-height:1.1}
 .banner-txt .muted{font-size:14px}
 .prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
-.card{display:block;color:inherit;text-align:left}
 .prod-grid.three{grid-template-columns:repeat(3,1fr)}
 .card:hover{color:inherit}
+.card{display:block;color:inherit;text-align:left}
 .card .ph{height:auto;aspect-ratio:1/1;border-radius:14px;transition:transform .25s}
 .three .card .ph{height:auto}
 .card:hover .ph{transform:translateY(-3px)}
@@ -624,3 +624,11 @@ main{flex:1;outline:none}
 .card .ph img.alt{opacity:0;background:#fff;transition:opacity .25s}
 @media(hover:hover){.card-wrap:hover .ph img.alt{opacity:1}}
 .card-wrap:has(:focus-visible) .ph img.alt{opacity:1}
+
+/* inicio (escritorio): título a la izquierda (1/3) y banner 3:1 completo a la derecha (2/3) */
+@media(min-width:901px){
+  .gom-band .band-top{display:grid;grid-template-columns:1fr 2fr;gap:36px;align-items:center;margin-bottom:28px}
+  .gom-band .band-top .sec-head{flex-direction:column;align-items:flex-start;justify-content:center;gap:12px;margin:0}
+  .gom-band .band-top .sec-title{font-size:clamp(44px,4.6vw,72px);line-height:1.05}
+  .gom-band .band-top .gom-banner{margin:0}
+}

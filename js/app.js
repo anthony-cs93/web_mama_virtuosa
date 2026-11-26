@@ -235,6 +235,17 @@ function heroHTML() {
 </section>`;
 }
 
+/* Sección de categoría en la portada: título a la izquierda y banner 3:1 a la derecha (escritorio), luego los productos */
+function bandSection(cat, id, title, list) {
+  return `<section class="section s48 gom-band" aria-labelledby="h-${id}">
+  <div class="band-top">
+    <div class="sec-head"><h2 class="sec-title" id="h-${id}">${esc(title)}</h2><a class="link" href="${catHref(cat)}">Ver todo →</a></div>
+    ${catBanner(cat, true)}
+  </div>
+  ${list.length ? `<div class="prod-grid">${list.map(p => card(p)).join('')}</div>` : ''}
+</section>`;
+}
+
 /* ---------- inicio ---------- */
 function pageHome() {
   const best = (D.featured || []).map(P).filter(Boolean).slice(0, 8);
@@ -252,21 +263,9 @@ ${heroHTML()}
     <div class="ph" style="background:${D.catTone[c]}">${catIcon(c)}</div>
     <div class="nm">${esc(c)}</div><div class="sb">${esc(D.catSub[c])}</div></a>`).join('')}</div>
 </section>
-${gomitas.length ? `<section class="section s48 gom-band" aria-labelledby="h-gom">
-  <div class="sec-head"><h2 class="sec-title" id="h-gom">Gomitas Saludables</h2><a class="link" href="${catHref('Gomitas saludables')}">Ver todo →</a></div>
-  ${catBanner('Gomitas saludables', true)}
-  <div class="prod-grid">${gomitas.map(p => card(p)).join('')}</div>
-</section>` : ''}
-${D.catOrder.includes('Belleza') ? `<section class="section s48 gom-band" aria-labelledby="h-bel">
-  <div class="sec-head"><h2 class="sec-title" id="h-bel">Belleza</h2><a class="link" href="${catHref('Belleza')}">Ver todo →</a></div>
-  ${catBanner('Belleza', true)}
-  ${belleza.length ? `<div class="prod-grid">${belleza.map(p => card(p)).join('')}</div>` : ''}
-</section>` : ''}
-${D.catOrder.includes('Ropa infantil') ? `<section class="section s48 gom-band" aria-labelledby="h-rop">
-  <div class="sec-head"><h2 class="sec-title" id="h-rop">Ropita infantil</h2><a class="link" href="${catHref('Ropa infantil')}">Ver todo →</a></div>
-  ${catBanner('Ropa infantil', true)}
-  ${ropita.length ? `<div class="prod-grid">${ropita.map(p => card(p)).join('')}</div>` : ''}
-</section>` : ''}
+${gomitas.length ? bandSection('Gomitas saludables', 'gom', 'Gomitas Saludables', gomitas) : ''}
+${D.catOrder.includes('Belleza') ? bandSection('Belleza', 'bel', 'Belleza', belleza) : ''}
+${D.catOrder.includes('Ropa infantil') ? bandSection('Ropa infantil', 'rop', 'Ropita infantil', ropita) : ''}
 <section class="section s48" aria-labelledby="h-best">
   <div class="sec-head"><h2 class="sec-title" id="h-best">Más vendidos</h2><a class="link" href="#/mas-vendidos">Ver todo →</a></div>
   <div class="prod-grid">${best.map(p => card(p, true)).join('')}</div>
