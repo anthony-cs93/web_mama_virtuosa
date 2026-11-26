@@ -101,7 +101,8 @@ main{flex:1;outline:none}
 /* ---------- inicio ---------- */
 .hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);background:linear-gradient(115deg,#fcfcc8 0%,#f8dcc6 16%,#fbbad9 34%,#c8befa 55%,#c8fcf4 76%,#ccfcc8 100%);min-height:420px}
 .hero-txt{padding:56px 32px 56px var(--px);display:flex;flex-direction:column;justify-content:center;gap:20px}
-.hero h1{font:400 clamp(52px,7vw,80px)/1 var(--script);letter-spacing:-1px;margin:0}
+.hero h1{font:400 var(--ts-d,clamp(52px,7vw,80px))/1 var(--script);letter-spacing:-1px;margin:0}
+.hero h1 .t-m{display:none}
 .hero p{font-size:18px;line-height:1.5;color:var(--muted);max-width:460px;margin:0}
 .hero .ctas{display:flex;gap:12px;flex-wrap:wrap}
 .hero-img{position:relative;background:var(--pink);min-height:420px;overflow:hidden}
@@ -132,8 +133,8 @@ main{flex:1;outline:none}
 .prod-grid.three{grid-template-columns:repeat(3,1fr)}
 .card{display:block;color:inherit;text-align:left}
 .card:hover{color:inherit}
-.three .card .ph{height:auto}
 .card .ph{height:auto;aspect-ratio:1/1;border-radius:14px;transition:transform .25s}
+.three .card .ph{height:auto}
 .card:hover .ph{transform:translateY(-3px)}
 .card .tag{position:absolute;top:10px;left:10px;background:#fff;border-radius:999px;padding:3px 10px;font:600 12px var(--sans);color:var(--ink)}
 .card .nm{margin-top:12px;font-size:16px;font-weight:600}
@@ -405,6 +406,10 @@ main{flex:1;outline:none}
   .hero{grid-template-columns:1fr}
   .hero{row-gap:0;padding-bottom:20px;min-height:0;align-content:start}
   .hero-txt{display:contents}
+  .hero h1{font-size:var(--ts-m,min(40px,10.6vw));line-height:1.02}
+  .hero h1 .t-d{display:none}
+  .hero h1 .t-m{display:inline}
+  .hero h1 .has-br{white-space:nowrap}
   .hero-img{grid-area:1/1;min-height:0;height:min(70vw,360px)}
   .hero .ctas{grid-area:1/1;align-self:end;justify-self:stretch;justify-content:center;z-index:1;padding:0 var(--px) 14px}
   .hero .ctas .btn.ghost,.hero .ctas .btn.soon{background:rgba(255,255,255,.88)}
@@ -447,8 +452,6 @@ main{flex:1;outline:none}
   .promo{font-size:11px;padding:5px 8px}
   .sec-title,.related{font-size:34px}
   .section{padding-top:36px}
-  .hero h1{font-size:min(40px,10.6vw);line-height:1.02}
-  .hero h1.has-br{white-space:nowrap}
   .hero p{font-size:12.5px;line-height:1.4}
   .hero .ctas{gap:10px}
   .hero .ctas .btn{font-size:14px;padding:10px 20px}

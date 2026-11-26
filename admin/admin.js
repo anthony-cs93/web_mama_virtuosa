@@ -994,6 +994,25 @@ function heroPreview(h) {
     <div class="hp-i">${h.img ? `<img src="${esc(src(h.img))}" alt="" style="object-position:${esc(h.pos || '60% 30%')}">` : '<em>Sin imagen</em>'}</div></div>`;
 }
 
+/* Vista previa del título a tamaño real: escritorio (pantalla de 1280 px) y celular (375 px). Cuenta las líneas y avisa si no cabe */
+const TP_DESK = 574, TP_MOB = 343, TP_SIZE_D = 80, TP_SIZE_M = 40;
+function titlePreview(h, bg) {
+  const box = $('#tp'); if (!box) return;
+  const frame = (cap, w, text, size, lh) => {
+    const t = (text || '').trim() || 'Título';
+    return `<div class="tp-box"><div class="tp-cap"><b>${cap}</b> <span data-info></span></div>
+      <div class="tp-frame" style="width:${w}px;background:${esc(bg || HERO_BG)}"><h3 style="font-size:${size}px;line-height:${lh};${/\n/.test(t) && cap === 'Celular' ? 'white-space:nowrap' : ''}">${esc(t).replace(/\r?\n/g, '<br>')}</h3></div></div>`;
+  };
+  box.innerHTML = frame('Escritorio', TP_DESK, h.title, h.titleSize || TP_SIZE_D, 1) + frame('Celular', TP_MOB, h.titleM || h.title, h.titleSizeM || TP_SIZE_M, 1.02);
+  box.querySelectorAll('.tp-box').forEach(bx => {
+    const hh = bx.querySelector('h3'), fr = bx.querySelector('.tp-frame'), info = bx.querySelector('[data-info]');
+    const size = parseFloat(hh.style.fontSize), lh = parseFloat(hh.style.lineHeight);
+    const lines = Math.max(1, Math.round(hh.offsetHeight / (size * lh))), over = hh.scrollWidth > hh.clientWidth + 1;
+    info.textContent = over ? '⚠ No cabe: se corta por el lado' : lines + (lines === 1 ? ' línea' : ' líneas');
+    info.className = over ? 'bad' : '';
+  });
+}
+
 function renderHero() {
   const d = D(), live = d.heroes.find(h => heroStatus(h)[1] === 'live'), shown = live || d.hero;
   view.innerHTML = `
@@ -1048,7 +1067,7 @@ function destField(n, cur) {
 
 function heroDialog(target) {
   const isDef = target === 'default', isNew = !target, d = D();
-  const draft = isNew ? { name: '', active: true, start: '', end: '', eyebrow: '', title: '', text: '', cta1: { label: 'Ver ofertas', link: '#/ofertas' }, cta2: null, img: '', imgM: '', alt: '', pos: '60% 30%', bg: '' }
+  const draft = isNew ? { name: '', active: true, start: '', end: '', eyebrow: '', title: '', titleM: '', text: '', cta1: { label: 'Ver ofertas', link: '#/ofertas' }, cta2: null, img: '', imgM: '', alt: '', pos: '60% 30%', bg: '' }
     : clone(isDef ? d.hero : target);
   dlg.innerHTML = `<form method="dialog" id="hf" novalidate>
     <div class="dlg-head"><h2 id="dlg-title">${isDef ? 'Portada por defecto' : isNew ? 'Nueva campaña' : 'Editar campaña'}</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar">${ic('x')}</button></div>
@@ -1067,9 +1086,14 @@ function heroDialog(target) {
       <div class="grid2">
         <label class="fld"><span>Enfoque de la imagen</span><select name="pos">${POS.map(p => `<option value="${p[0]}"${p[0] === draft.pos ? ' selected' : ''}>${p[1]}</option>`).join('')}</select><small>Qué parte se conserva al recortar.</small></label>
         <label class="fld"><span>Descripción de la imagen (accesibilidad)</span><input type="text" name="alt" value="${esc(draft.alt)}" maxlength="140"></label></div>
+      <label class="fld"><span>Etiqueta superior</span><input type="text" name="eyebrow" value="${esc(draft.eyebrow)}" maxlength="40" placeholder="Navidad"></label>
       <div class="grid2">
-        <label class="fld"><span>Etiqueta superior</span><input type="text" name="eyebrow" value="${esc(draft.eyebrow)}" maxlength="40" placeholder="Navidad"></label>
-        <label class="fld"><span>Título *</span><textarea name="title" rows="2" maxlength="70">${esc(draft.title)}</textarea><small>Presiona Enter para partir el título en dos líneas (en el celular se respeta ese corte).</small></label></div>
+        <div class="fld"><span>Título · escritorio *</span><textarea name="title" rows="2" maxlength="70">${esc(draft.title)}</textarea>
+          <label class="tsize">Tamaño <input type="number" name="titleSize" min="24" max="140" step="2" value="${draft.titleSize || ''}" placeholder="auto"> px</label></div>
+        <div class="fld"><span>Título · celular</span><textarea name="titleM" rows="2" maxlength="70" placeholder="Vacío = igual que escritorio">${esc(draft.titleM || '')}</textarea>
+          <label class="tsize">Tamaño <input type="number" name="titleSizeM" min="20" max="80" step="1" value="${draft.titleSizeM || ''}" placeholder="auto"> px</label></div></div>
+      <small class="muted">Enter parte el título en dos líneas. En celular se respeta ese corte y no se parte más; vacío en «tamaño» usa el tamaño automático.</small>
+      <div class="tp" id="tp" aria-live="polite"></div>
       <label class="fld"><span>Texto</span><textarea name="text" rows="2" maxlength="200">${esc(draft.text)}</textarea></label>
       <div class="grid2">
         <div class="stack"><label class="fld"><span>Botón principal: texto</span><input type="text" name="cta1Label" value="${esc(draft.cta1 ? draft.cta1.label : '')}" maxlength="30"></label>
@@ -1088,12 +1112,13 @@ function heroDialog(target) {
   const f = $('#hf'), el = n => f.elements[n];
   const dest = n => (el(n + 'Sel').value === 'custom' ? el(n + 'Custom').value.trim() : el(n + 'Sel').value);
   const read = () => ({
-    eyebrow: el('eyebrow').value.trim(), title: el('title').value.trim(), text: el('text').value.trim(),
+    eyebrow: el('eyebrow').value.trim(), title: el('title').value.trim(), titleM: el('titleM').value.trim(), text: el('text').value.trim(),
+    titleSize: Math.max(0, Math.min(140, Math.round(+el('titleSize').value) || 0)), titleSizeM: Math.max(0, Math.min(80, Math.round(+el('titleSizeM').value) || 0)),
     cta1: el('cta1Label').value.trim() ? { label: el('cta1Label').value.trim(), link: dest('cta1') } : null,
     cta2: el('cta2Label').value.trim() ? { label: el('cta2Label').value.trim(), link: dest('cta2') } : null,
     img: draft.img, pos: el('pos').value, bg: el('bg').value
   });
-  const preview = () => { $('#hp-box').innerHTML = heroPreview(read()); };
+  const preview = () => { $('#hp-box').innerHTML = heroPreview(read()); titlePreview(read(), el('bg').value); };
   const drawUp = busy => {
     $('#hu').innerHTML = `${draft.img ? `<img class="hu-img" src="${esc(src(draft.img))}" alt="Imagen actual">` : '<span class="muted small">Todavía no hay imagen.</span>'}
       <label class="btn ghost sm">${busy ? 'Subiendo…' : draft.img ? 'Reemplazar imagen' : 'Subir imagen'}<input type="file" accept="image/*" hidden></label>`;
@@ -1134,7 +1159,10 @@ function heroDialog(target) {
     if (r.cta1 && !okLink(r.cta1.link)) return err('El enlace del botón principal debe empezar con #/, / o https://');
     if (r.cta2 && !okLink(r.cta2.link)) return err('El enlace del botón secundario debe empezar con #/, / o https://');
     if (!isDef && el('start').value && el('end').value && el('end').value < el('start').value) return err('La fecha «Hasta» no puede ser anterior a «Desde».');
-    const out = { ...r, imgM: draft.imgM, alt: el('alt').value.trim() || r.title };
+    const out = { ...r, imgM: draft.imgM, alt: el('alt').value.trim() || r.title.replace(/\s*\n\s*/g, ' ') };
+    if (!out.titleM) delete out.titleM;
+    if (!out.titleSize) delete out.titleSize;
+    if (!out.titleSizeM) delete out.titleSizeM;
     if (isDef) d.hero = out;
     else {
       Object.assign(out, { name: el('name').value.trim(), active: el('active').checked, start: el('start').value, end: el('end').value });
@@ -1143,7 +1171,8 @@ function heroDialog(target) {
     markDirty(); dlg.close(); renderHero();
     toast('Portada actualizada. Recuerda guardar los cambios.');
   });
-  dlg.showModal(); (isDef ? el('title') : el(isNew ? 'preset' : 'name')).focus();
+  dlg.showModal(); preview(); if (document.fonts) document.fonts.ready.then(preview);
+  (isDef ? el('title') : el(isNew ? 'preset' : 'name')).focus();
 }
 /* Crea la versión grande (1600 px) y la liviana (800 px) de la imagen, en JPEG */
 async function heroVariants(file) {
@@ -1449,11 +1478,6 @@ function ordClick(b, act) {
   if (act === 'o-open') return openOrder(b.dataset.code);
   if (act === 'o-more') { ordLimit += 50; return drawOrders(); }
   if (act === 'o-refresh') return refreshOrders(b);
-}
-
-/* ---------- arranque ---------- */
-boot().catch(err => { bootOff(); document.body.insertAdjacentHTML('afterbegin', `<p style="padding:20px">No se pudo conectar con el panel (${esc(err.message)}). Revisa que la web esté desplegada en Vercel (o corriendo con <code>vercel dev</code>).</p>`); });
-})();
   if (act === 'o-new') return openNewOrder();
 }
 
@@ -1529,3 +1553,8 @@ function openNewOrder() {
   addLine(); syncShip();
   odlg.showModal();
   f.elements.name.focus();
+}
+
+/* ---------- arranque ---------- */
+boot().catch(err => { bootOff(); document.body.insertAdjacentHTML('afterbegin', `<p style="padding:20px">No se pudo conectar con el panel (${esc(err.message)}). Revisa que la web esté desplegada en Vercel (o corriendo con <code>vercel dev</code>).</p>`); });
+})();
