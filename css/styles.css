@@ -128,9 +128,9 @@ main{flex:1;outline:none}
 .banner-txt{position:absolute;left:22px;bottom:20px;background:rgba(255,251,245,.88);border-radius:14px;padding:10px 20px 12px}
 .banner-txt h1{font:400 44px var(--script);margin:0;line-height:1.1}
 .banner-txt .muted{font-size:14px}
-.prod-grid.three{grid-template-columns:repeat(3,1fr)}
 .prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
 .card{display:block;color:inherit;text-align:left}
+.prod-grid.three{grid-template-columns:repeat(3,1fr)}
 .card:hover{color:inherit}
 .card .ph{height:auto;aspect-ratio:1/1;border-radius:14px;transition:transform .25s}
 .three .card .ph{height:auto}
@@ -620,3 +620,7 @@ main{flex:1;outline:none}
 .pack-tiers s{margin:0}
 .line .tot .was{display:block;font-size:13px;font-weight:400;color:var(--soft,#8a8290)}
 .line .un s{margin-left:4px}
+/* segunda foto al pasar el mouse por la tarjeta */
+.card .ph img.alt{opacity:0;background:#fff;transition:opacity .25s}
+@media(hover:hover){.card-wrap:hover .ph img.alt{opacity:1}}
+.card-wrap:has(:focus-visible) .ph img.alt{opacity:1}

@@ -178,7 +178,7 @@ const quickAdd = p => `<div class="qa">${p.opt && p.opt.values && p.opt.values.l
   ? `<a class="quick-add" href="#/producto/${p.id}">Elegir opciones</a>`
   : `<button type="button" class="quick-add" data-act="quick-add" data-id="${p.id}" aria-label="Agregar ${esc(p.name)} al carrito">Agregar al carrito</button>`}</div>`;
 const card = (p, withCat) => `<div class="card-wrap"><a class="card" href="#/producto/${p.id}">
-  <div class="ph${pics(p).length ? ' has-img' : ''}" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
+  <div class="ph${pics(p).length ? ' has-img' : ''}" style="background:${p.tone}">${imgOrLabel(p, '[foto producto]')}${pics(p)[1] ? `<img class="alt" src="${esc(pics(p)[1])}" alt="" loading="lazy">` : ''}${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}</div>
   <div class="nm">${esc(p.name)}</div>${withCat ? `<div class="ct">${esc(p.cat)}</div>` : ''}
   <div class="pr"><b>${fmt(p.price)}</b>${p.old ? ` <s>${fmt(p.old)}</s>` : ''}</div></a>${quickAdd(p)}</div>`;
 
