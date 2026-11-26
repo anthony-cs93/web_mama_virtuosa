@@ -151,6 +151,13 @@ const CAT_ICONS = {
   'Gomitas saludables': 'img/cat/gomitas.png'
 };
 const CAT_ICON_DEFAULT = 'img/cat/ropa.png';
+/* Banner de cada sección: se muestra en la portada (con enlace) y arriba de su página de categoría */
+const CAT_BANNERS = {
+  'Gomitas saludables': ['img/banner_gomitas.jpg', 'Una familia disfruta de las gomitas saludables'],
+  'Belleza': ['img/banner_belleza.jpg', 'Maquillaje: labiales, brochas, rubor y esmalte de uñas sobre fondo rosa'],
+  'Ropa infantil': ['img/banner_hurray.jpg', 'Bebé sonriendo con un saco de dormir Hurray']
+};
+const catBanner = (c, linked, inner = '') => { const b = CAT_BANNERS[c]; if (!b) return ''; const img = `<img src="${b[0]}" width="2000" height="667" alt="${esc(b[1])}" loading="lazy">`; return linked ? `<a class="gom-banner" href="${catHref(c)}">${img}</a>` : `<div class="gom-banner strip">${img}${inner}</div>`; };
 const catIcon = c => { const u = CAT_ICONS[c] || CAT_ICON_DEFAULT; return `<span class="cat-ico" style="-webkit-mask-image:url(${u});mask-image:url(${u})" aria-hidden="true"></span>`; };
 
 /* ---------- hero (portada) y campañas de temporada ---------- */
@@ -206,17 +213,17 @@ ${heroHTML()}
 </section>
 ${gomitas.length ? `<section class="section s48 gom-band" aria-labelledby="h-gom">
   <div class="sec-head"><h2 class="sec-title" id="h-gom">Gomitas Saludables</h2><a class="link" href="${catHref('Gomitas saludables')}">Ver todo →</a></div>
-  <a class="gom-banner" href="${catHref('Gomitas saludables')}"><img src="img/banner_gomitas.jpg" width="2000" height="667" alt="Una familia disfruta de las gomitas saludables" loading="lazy"></a>
+  ${catBanner('Gomitas saludables', true)}
   <div class="prod-grid">${gomitas.map(p => card(p)).join('')}</div>
 </section>` : ''}
 ${D.catOrder.includes('Belleza') ? `<section class="section s48 gom-band" aria-labelledby="h-bel">
   <div class="sec-head"><h2 class="sec-title" id="h-bel">Belleza</h2><a class="link" href="${catHref('Belleza')}">Ver todo →</a></div>
-  <a class="gom-banner" href="${catHref('Belleza')}"><img src="img/banner_belleza.jpg" width="2000" height="667" alt="Maquillaje: labiales, brochas, rubor y esmalte de uñas sobre fondo rosa" loading="lazy"></a>
+  ${catBanner('Belleza', true)}
   ${belleza.length ? `<div class="prod-grid">${belleza.map(p => card(p)).join('')}</div>` : ''}
 </section>` : ''}
 ${D.catOrder.includes('Ropa infantil') ? `<section class="section s48 gom-band" aria-labelledby="h-rop">
   <div class="sec-head"><h2 class="sec-title" id="h-rop">Ropita infantil</h2><a class="link" href="${catHref('Ropa infantil')}">Ver todo →</a></div>
-  <a class="gom-banner" href="${catHref('Ropa infantil')}"><img src="img/banner_hurray.jpg" width="2000" height="667" alt="Bebé sonriendo con un saco de dormir Hurray" loading="lazy"></a>
+  ${catBanner('Ropa infantil', true)}
   ${ropita.length ? `<div class="prod-grid">${ropita.map(p => card(p)).join('')}</div>` : ''}
 </section>` : ''}
 <section class="section s48" aria-labelledby="h-best">
@@ -280,7 +287,7 @@ function updateGrid(pending) {
   $('#min-out') && ($('#min-out').textContent = 'S/ ' + F.min);
   $('#max-out') && ($('#max-out').textContent = 'S/ ' + F.max);
 }
-function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null, rank = null, quick = [] }) {
+function listPage({ title, crumbList, base, sub, pending, showSubs = true, filters = [], preset = null, rank = null, quick = [], bannerCat = null }) {
   initFilters(base, sub, filters, preset);
   if (rank) F.rank = new Map(rank.map((id, i) => [id, i]));
   const subs = [...new Set(base.map(p => p.sub).filter(Boolean))];
@@ -293,20 +300,14 @@ function listPage({ title, crumbList, base, sub, pending, showSubs = true, filte
         <label class="chk"><input type="checkbox" data-f="fall" data-fid="${esc(f.id)}" checked> Todas</label>
         ${opts.map(([o, n]) => `<label class="chk"><input type="checkbox" data-f="fopt" data-fid="${esc(f.id)}" value="${esc(o)}"> ${esc(o)} <span class="cnt">${n}</span></label>`).join('')}</fieldset>`;
   }).join('');
+  const titleHtml = `<h1>${esc(title)}</h1><div class="muted" id="count" aria-live="polite"></div>`;
+  const banner = bannerCat ? catBanner(bannerCat, false, `<div class="banner-txt">${titleHtml}</div>`) : '';
   const html = `
 <div class="cat-page">
   ${crumbs(crumbList)}
-  <div class="cat-head">
-    <div><h1>${esc(title)}</h1><div class="muted" id="count" aria-live="polite"></div></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="sort filter-toggle" data-act="filters-toggle" aria-expanded="false" aria-controls="filters">☰ Filtros</button>
-      ${quick.length ? `<div class="quick-chips" role="group" aria-label="Filtro rápido">${quick.map(([l, k]) => `<label><input type="checkbox" data-f="quick" value="${k}"><span>${esc(l)}</span></label>`).join('')}</div>` : ''}
-      <label class="sort">Ordenar: <select data-f="sort" aria-label="Ordenar por">
-        <option value="sales">Más vendidos</option><option value="new">Novedades</option>
-        <option value="asc">Precio: menor a mayor</option><option value="desc">Precio: mayor a menor</option></select></label>
-    </div>
-  </div>
   <div class="cat-body">
+    <div class="cat-side">
+    ${banner ? '' : `<div class="cat-title">${titleHtml}</div>`}
     <form class="filters" id="filters" onsubmit="return false" aria-label="Filtros">
       ${filterHtml}
       ${showSubs && !filters.length && subs.length ? `<fieldset><legend>Subcategoría</legend>
@@ -323,7 +324,18 @@ function listPage({ title, crumbList, base, sub, pending, showSubs = true, filte
       <div><label class="chk"><input type="checkbox" data-f="offers"> Solo ofertas</label>
         <label class="chk"><input type="checkbox" checked disabled> Disponible</label></div>
     </form>
+    </div>
+    <div class="cat-main">
+    ${banner}
+    <div class="cat-ctrls">
+      <button class="sort filter-toggle" data-act="filters-toggle" aria-expanded="false" aria-controls="filters">☰ Filtros</button>
+      ${quick.length ? `<div class="quick-chips" role="group" aria-label="Filtro rápido">${quick.map(([l, k]) => `<label><input type="checkbox" data-f="quick" value="${k}"><span>${esc(l)}</span></label>`).join('')}</div>` : ''}
+      <label class="sort">Ordenar: <select data-f="sort" aria-label="Ordenar por">
+        <option value="sales">Más vendidos</option><option value="new">Novedades</option>
+        <option value="asc">Precio: menor a mayor</option><option value="desc">Precio: mayor a menor</option></select></label>
+    </div>
     <div class="prod-grid three" id="grid"></div>
+    </div>
   </div>
 </div>`;
   return { title, html, after: () => updateGrid(pending) };
@@ -347,7 +359,7 @@ function pageCategory(cat, seg) {
   return listPage({
     title: crumb || cat,
     crumbList: [['Inicio', '#/'], [cat, crumb ? catHref(cat) : null], ...(crumb ? [[crumb]] : [])],
-    base, filters, preset, quick: QUICK[cat] || [], pending: crumb && !preset ? crumb : null
+    base, filters, preset, quick: QUICK[cat] || [], bannerCat: cat, pending: crumb && !preset ? crumb : null
   });
 }
 /* «Ver todo» de «Más vendidos» del inicio: los mismos productos destacados desde el panel, en el orden elegido */

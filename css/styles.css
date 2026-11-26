@@ -124,6 +124,11 @@ main{flex:1;outline:none}
 .gom-banner{display:block;border-radius:18px;overflow:hidden;margin-bottom:24px}
 .gom-banner img{display:block;width:100%;height:auto}
 .prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
+.gom-banner.strip{position:relative;margin-bottom:20px}
+.gom-banner.strip img{aspect-ratio:5/1;object-fit:cover}
+.banner-txt{position:absolute;left:22px;bottom:20px;background:rgba(255,251,245,.88);border-radius:14px;padding:10px 20px 12px}
+.banner-txt h1{font:400 44px var(--script);margin:0;line-height:1.1}
+.banner-txt .muted{font-size:14px}
 .prod-grid.three{grid-template-columns:repeat(3,1fr)}
 .card{display:block;color:inherit;text-align:left}
 .card:hover{color:inherit}
@@ -151,7 +156,10 @@ main{flex:1;outline:none}
 /* ---------- categoría ---------- */
 .cat-page{padding:24px var(--px) 56px}
 .cat-head{display:flex;justify-content:space-between;align-items:end;margin:8px 0 24px;gap:16px;flex-wrap:wrap}
-.cat-head h1{font:400 54px var(--script);margin:0;line-height:1.1}
+.cat-main{min-width:0}
+.cat-title{margin:8px 0 24px}
+.cat-ctrls{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin:0 0 20px}
+.cat-title h1{font:400 54px var(--script);margin:0;line-height:1.1}
 .sort{background:#fff;border:1px solid var(--line);border-radius:999px;padding:9px 18px;font-size:14px;display:flex;align-items:center;gap:6px}
 .sort select{border:0;background:none;outline:0;font-weight:600;cursor:pointer}
 .cat-body{display:grid;grid-template-columns:230px 1fr;gap:36px;align-items:start}
@@ -411,7 +419,10 @@ main{flex:1;outline:none}
   .card .ph,.three .card .ph{height:auto}
   .podcast-band{grid-template-columns:1fr;padding:24px;gap:20px}
   .podcast-band .cover{height:160px}
-  .cat-body{grid-template-columns:1fr}
+  .cat-body{grid-template-columns:1fr;gap:14px}
+  .cat-side,.cat-main{display:contents}
+  .cat-title{order:1;margin:8px 0 12px}
+  .banner-txt{left:12px;bottom:12px;padding:6px 14px 8px}.banner-txt h1{font-size:30px}.banner-txt .muted{font-size:12px}.cat-main .gom-banner{order:2}.cat-ctrls{order:3;justify-content:flex-start;margin:0}.filters{order:4}.prod-grid{order:5}
   .filter-toggle{display:inline-flex}
   .filters{display:none;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
   .filters.open{display:flex}
@@ -448,7 +459,7 @@ main{flex:1;outline:none}
   .hero .ctas .btn.ghost,.hero .ctas .btn.soon{padding:8px 13px}
   .hero .ctas .soon-tag{font-size:9px;padding:2px 6px}
   .main-img{touch-action:pan-y}
-  .cat-head h1,.cart-page h1,.co-page h1,.help-page h1{font-size:42px}
+  .cat-title h1,.cart-page h1,.co-page h1,.help-page h1{font-size:42px}
   .cat-card .nm{font-size:24px}
   .card .nm{font-size:15px}
   .main-img{border-radius:14px}
