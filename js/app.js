@@ -27,7 +27,9 @@ function toast(msg, link) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), link ? 4500 : 2600);
 }
 function waLink(msg) {
-  return 'https://wa.me/' + C.whatsapp + '?text=' + encodeURIComponent(msg || C.whatsappMsg);
+  /* el mensaje inicial guardado en el panel puede traer un nombre propio: nunca se menciona a Angie */
+  const text = String(msg || C.whatsappMsg || '').replace(/Hola,?\s+Angie[,!.]?/gi, 'Hola,').replace(/Angie/g, '').replace(/ {2,}/g, ' ').trim();
+  return 'https://wa.me/' + C.whatsapp + '?text=' + encodeURIComponent(text);
 }
 
 /* ---------- carrito ---------- */
@@ -463,7 +465,7 @@ function pageProduct(id) {
       ${packOffer(p)}
       <div class="buy-row desk">${qtyCtl()}<button class="btn" data-act="pdp-add">Agregar al carrito</button></div>
       <button class="btn ghost" data-act="pdp-buy">Comprar ahora</button>
-      <button class="btn wa" data-act="wa" data-msg="${esc('Hola Angie, me interesa: ' + p.name)}">💬 Consultar por WhatsApp</button>
+      <button class="btn wa" data-act="wa" data-msg="${esc('Hola, me interesa: ' + p.name)}">💬 Consultar por WhatsApp</button>
       <div class="perks">🚚 Lima 2–4 días · provincias 4–7 días<br>✔ Disponible</div>
       <div class="acc">
         <details open><summary>Descripción</summary><p>${esc(p.desc)}</p></details>
@@ -605,7 +607,7 @@ function districtSelect() {
     <select id="f-distrito" name="distrito" data-co="distrito" autocomplete="address-level3" aria-required="true"${e ? ' aria-invalid="true"' : ''} aria-describedby="e-distrito">
       <option value=""${v ? '' : ' selected'}>Elige tu distrito</option>${group('Lima')}${group('Callao')}</select>
     <div class="msg" id="e-distrito">${e ? esc(e) : ''}</div>
-    <div class="hint">¿Tu distrito no aparece? <a href="#" data-act="wa" data-msg="Hola Angie, quisiera consultar si hacen delivery a mi distrito.">Consúltanos por WhatsApp</a>.</div></div>`;
+    <div class="hint">¿Tu distrito no aparece? <a href="#" data-act="wa" data-msg="Hola, quisiera consultar si hacen delivery a mi distrito.">Consúltanos por WhatsApp</a>.</div></div>`;
 }
 function showErr(k, msg) {
   const w = $(`[data-fld="${k}"]`); if (!w) return;
@@ -748,7 +750,7 @@ const when = iso => new Date(iso).toLocaleString('es-PE', { day: 'numeric', mont
 const statusAt = (o, s) => { const h = [...o.history].reverse().find(x => x.status === s); return h ? h.at : null; };
 function orderWa(o, extra) {
   const lines = o.items.map(i => `• ${i.name}${i.opt ? ' (' + i.opt + ')' : ''} × ${i.qty}`).join('\n');
-  return `Hola Angie, soy ${o.customer.name}. Mi pedido es ${o.code} por ${fmt(o.totals.total)}:\n${lines}\nPago: ${PAY_META[o.pay.method].l}.${extra ? '\n' + extra : ''}`;
+  return `Hola, soy ${o.customer.name}. Mi pedido es ${o.code} por ${fmt(o.totals.total)}:\n${lines}\nPago: ${PAY_META[o.pay.method].l}.${extra ? '\n' + extra : ''}`;
 }
 const copyRow = (label, value) => value ? `<div class="copy-row"><span>${esc(label)}</span><b>${esc(value)}</b><button type="button" class="link ul" data-act="copy" data-v="${esc(value)}">Copiar</button></div>` : '';
 function payPanel(o) {
@@ -1157,5 +1159,6 @@ document.addEventListener('submit', e => {
 /* ---------- arranque ---------- */
 $('#year').textContent = new Date().getFullYear();
 buildNav(); buildDrawer();
+{ const ig = $('#ig-link'), u = C.social && C.social.Instagram; if (ig && /^https?:\/\//.test(u || '')) ig.href = u.replace(/\/$/, ''); }
 if (SOON) { const f = $('.foot-podcast'); if (f) f.outerHTML = `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>`; } updateCartCount(); render();
 })();

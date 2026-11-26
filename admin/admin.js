@@ -873,7 +873,7 @@ function episodeDialog(e) {
 /* =====================================================================
    AJUSTES
    ===================================================================== */
-const SOCIALS = ['Instagram', 'TikTok', 'Facebook', 'Spotify', 'Apple', 'YouTube'];
+const SOCIALS = ['Instagram', 'Spotify', 'Apple', 'YouTube'];
 function renderSettings() {
   const c = S.config, d = D();
   view.innerHTML = `
