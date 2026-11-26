@@ -592,8 +592,8 @@ const fld = (k, extra = '', label) => {
 const money0 = n => 'S/ ' + (Number.isInteger(n) ? n : n.toFixed(2));
 function districtSelect() {
   const v = ui.co.f.distrito || '', e = ui.co.err.distrito;
-  const opt = d => `<option value="${esc(d.name)}"${d.name === v ? ' selected' : ''}${d.ship && d.cost !== null ? '' : ' disabled'}>${esc(d.name)} — ${d.ship && d.cost !== null ? money0(d.cost) : 'sin reparto'}</option>`;
-  const group = z => `<optgroup label="${z === 'Callao' ? 'Callao' : 'Lima Metropolitana'}">${districts().filter(d => d.zone === z).map(opt).join('')}</optgroup>`;
+  const opt = d => `<option value="${esc(d.name)}"${d.name === v ? ' selected' : ''}>${esc(d.name)} — ${money0(d.cost)}</option>`;
+  const group = z => { const l = sendable().filter(d => d.zone === z); return l.length ? `<optgroup label="${z === 'Callao' ? 'Callao' : 'Lima Metropolitana'}">${l.map(opt).join('')}</optgroup>` : ''; };
   return `<div class="fld ${e ? 'err' : ''}" data-fld="distrito"><label for="f-distrito">Distrito<span class="req" aria-hidden="true"> *</span></label>
     <select id="f-distrito" name="distrito" data-co="distrito" autocomplete="address-level3" aria-required="true"${e ? ' aria-invalid="true"' : ''} aria-describedby="e-distrito">
       <option value=""${v ? '' : ' selected'}>Elige tu distrito</option>${group('Lima')}${group('Callao')}</select>
