@@ -45,7 +45,7 @@
     <button class="icon-btn search-btn" data-act="search-toggle" aria-label="Buscar" aria-expanded="false">⌕</button>
     <a class="account" href="#/pedidos">Mis pedidos</a>
     <a class="cart-btn" href="#/carrito" aria-label="Carrito">
-      <span class="cart-txt">Carrito</span><span class="cart-ico" aria-hidden="true">🛍</span>
+      <svg class="cart-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.2a1.5 1.5 0 0 1-1.5 1.3H7.7a1.5 1.5 0 0 1-1.5-1.3z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg><span class="cart-txt">Carrito</span>
       <span class="badge" id="cart-count" aria-live="polite">0</span>
     </a>
   </header>
@@ -105,6 +105,13 @@
   <div class="drawer-body" id="drawer-body"></div>
 </aside>
 
+<dialog class="confirm" id="confirm" aria-labelledby="confirm-t">
+  <form method="dialog">
+    <h2 id="confirm-t">¿Quitar este producto?</h2>
+    <p id="confirm-p"></p>
+    <div class="confirm-btns"><button class="btn ghost" value="cancel" autofocus>Cancelar</button><button class="btn" value="ok" id="confirm-ok">Sí, quitar</button></div>
+  </form>
+</dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/api/data.js"></script>

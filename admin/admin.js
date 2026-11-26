@@ -1377,7 +1377,7 @@ function renderOrderDialog(o) {
     <section class="o-sec"><h3>Entrega</h3>${line('Modalidad', d.label + (d.eta ? ' · ' + d.eta : ''))}
       ${d.ship === 'pick' ? '' : line('Dirección', [a.dir, a.ref && '(' + a.ref + ')', a.distrito, a.prov !== a.distrito ? a.prov : '', a.depto !== a.prov ? a.depto : ''].filter(Boolean).join(', '))}</section>
     <section class="o-sec"><h3>Productos</h3>${o.items.map(i => `<div class="o-kv"><span>${esc(i.name)}${i.opt ? ' · ' + esc(i.opt) : ''} × ${i.qty}</span><b>${fmt(i.price * i.qty)}</b></div>`).join('')}
-      <div class="o-sum">${t.disc ? `<div class="o-kv"><span>Cupón ${esc(t.coupon)}</span><b>− ${fmt(t.disc)}</b></div>` : ''}
+      <div class="o-sum">${t.bundle ? `<div class="o-kv"><span>Pack de gomitas</span><b>− ${fmt(t.bundle)}</b></div>` : ''}${t.disc ? `<div class="o-kv"><span>Cupón ${esc(t.coupon)}</span><b>− ${fmt(t.disc)}</b></div>` : ''}
       <div class="o-kv"><span>Envío</span><b>${t.ship ? fmt(t.ship) : 'Gratis'}</b></div>${t.surcharge ? `<div class="o-kv"><span>Recargo tarjeta (${t.surchargePct}%)</span><b>${fmt(t.surcharge)}</b></div>` : ''}
       <div class="o-kv o-total"><span>Total · ${esc(O_PAY[o.pay.method])}</span><b>${fmt(t.total)}</b></div></div></section>
     ${o.proof ? `<section class="o-sec"><h3>Comprobante <small>${esc(when(o.proof.at))}</small></h3><a href="${esc(o.proof.url)}" target="_blank" rel="noopener"><img class="proof-img" src="${esc(o.proof.url)}" alt="Comprobante de pago de ${esc(o.code)}"></a></section>` : ''}

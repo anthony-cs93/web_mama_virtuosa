@@ -1,7 +1,7 @@
 /* Servidor local (npm run dev): sirve la tienda y ejecuta las funciones de api/ sin Vercel.
    Sin Vercel Blob todo se guarda en .data/ (el panel avisa que es modo de prueba). Clave del panel: la de ADMIN_PASSWORD o «dev». */
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -35,6 +35,7 @@ createServer(async (req, res) => {
     if (!p || p.endsWith('/') || p.endsWith('\\')) p += 'index.html';
     if (p.includes('..') || /^(node_modules|api|\.git)([/\\]|$)/.test(p)) { res.statusCode = 404; return res.end(); }
     const file = join(ROOT, p);
+    if (!extname(file) && (await stat(file).catch(() => null))?.isDirectory()) { res.statusCode = 301; res.setHeader('Location', url.pathname + '/' + url.search); return res.end(); }
     res.setHeader('Content-Type', TYPES[extname(file)] || 'application/octet-stream');
     res.end(await readFile(file));
   } catch (e) {

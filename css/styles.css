@@ -64,7 +64,7 @@ main{flex:1;outline:none}
 .account:hover{color:var(--plum)}
 .cart-btn{background:var(--pink);border-radius:999px;padding:10px 18px;font:600 15px var(--sans);color:var(--ink);display:flex;gap:8px;align-items:center;white-space:nowrap;flex:none;transition:background .18s}
 .cart-btn:hover{background:#f7a5cd;color:var(--ink)}
-.cart-ico{display:none}
+.cart-ico{display:block;flex:none}
 .badge{background:var(--plum);color:#fff;border-radius:999px;min-width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;padding:0 6px}
 .icon-btn{border:0;background:none;font-size:20px;width:40px;height:40px;border-radius:50%;display:none;align-items:center;justify-content:center;flex:none}
 .icon-btn:hover{background:var(--lav)}
@@ -123,13 +123,13 @@ main{flex:1;outline:none}
 .cat-card .sb{font-size:14px;color:var(--muted);margin-top:2px}
 .gom-banner{display:block;border-radius:18px;overflow:hidden;margin-bottom:24px}
 .gom-banner img{display:block;width:100%;height:auto}
-.prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
 .gom-banner.strip{position:relative;margin-bottom:20px}
 .gom-banner.strip img{aspect-ratio:5/1;object-fit:cover}
 .banner-txt{position:absolute;left:22px;bottom:20px;background:rgba(255,251,245,.88);border-radius:14px;padding:10px 20px 12px}
 .banner-txt h1{font:400 44px var(--script);margin:0;line-height:1.1}
 .banner-txt .muted{font-size:14px}
 .prod-grid.three{grid-template-columns:repeat(3,1fr)}
+.prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
 .card{display:block;color:inherit;text-align:left}
 .card:hover{color:inherit}
 .card .ph{height:auto;aspect-ratio:1/1;border-radius:14px;transition:transform .25s}
@@ -401,7 +401,6 @@ main{flex:1;outline:none}
   .search.open{display:flex}
   .cart-btn{padding:8px 12px}
   .cart-txt{display:none}
-  .cart-ico{display:inline}
   .nav{display:none}
   .hero{grid-template-columns:1fr}
   .hero{row-gap:0;padding-bottom:20px;min-height:0;align-content:start}
@@ -579,11 +578,17 @@ main{flex:1;outline:none}
 }
 
 /* llama la atención al botón del carrito tras agregar un producto */
-.cart-btn.nudge{animation:cart-wiggle .7s ease-in-out 2,cart-ring 1.2s ease-out 5;background:#f7a5cd}
-.cart-btn.nudge .badge{animation:badge-pop .5s ease-out}
-@keyframes cart-wiggle{0%,100%{transform:rotate(0)}20%{transform:rotate(-6deg) scale(1.08)}40%{transform:rotate(6deg) scale(1.08)}60%{transform:rotate(-3deg)}80%{transform:rotate(3deg)}}
-@keyframes cart-ring{0%{box-shadow:0 0 0 0 rgba(162,68,156,.55)}100%{box-shadow:0 0 0 14px rgba(162,68,156,0)}}
-@keyframes badge-pop{0%{transform:scale(1)}40%{transform:scale(1.7)}100%{transform:scale(1)}}
+.cart-btn.nudge{animation:cart-wiggle 3s ease-in-out infinite,cart-ring 3s ease-out infinite;background:#f7a5cd}
+.cart-btn.nudge .badge{animation:badge-pop 3s ease-out infinite}
+@media(prefers-reduced-motion:reduce){.cart-btn.nudge,.cart-btn.nudge .badge{animation:none}}
+@keyframes cart-wiggle{0%,26%,100%{transform:rotate(0)}5%{transform:rotate(-6deg) scale(1.08)}10%{transform:rotate(6deg) scale(1.08)}16%{transform:rotate(-3deg)}21%{transform:rotate(3deg)}}
+@keyframes cart-ring{0%{box-shadow:0 0 0 0 rgba(162,68,156,.55)}40%,100%{box-shadow:0 0 0 14px rgba(162,68,156,0)}}
+@keyframes badge-pop{0%,30%,100%{transform:scale(1)}8%{transform:scale(1.5)}}
+.confirm{border:0;border-radius:18px;padding:26px 26px 22px;max-width:min(400px,calc(100vw - 32px));background:var(--cream);color:var(--ink);box-shadow:0 20px 50px rgba(42,34,48,.3)}
+.confirm::backdrop{background:rgba(42,34,48,.45)}
+.confirm h2{font:400 28px var(--script);margin:0 0 8px}
+.confirm p{margin:0 0 20px;color:var(--muted);font-size:15px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px;justify-content:flex-end}
 .req{color:#b3261e;font-weight:700}
 .req-note{margin:-6px 0 0;font-size:13px;color:var(--muted)}
 .pay-note a{font-weight:700;text-decoration:underline}
@@ -600,3 +605,18 @@ main{flex:1;outline:none}
 .quick-add:hover{background:var(--plum);color:#fff}
 .card-wrap:hover .quick-add,.card-wrap:focus-within .quick-add{opacity:1;transform:none}
 @media (hover:none){.qa{padding:8px}.quick-add{opacity:1;transform:none;font-size:12px;padding:8px 10px}}
+
+/* paquetes de gomitas */
+.pack-box{background:#fff;border:1.5px dashed var(--plum);border-radius:14px;padding:14px 16px;margin:0 0 18px;font-size:15px}
+.pack-box>b{font-size:16px}
+.pack-box p{margin:4px 0 10px;color:var(--muted);font-size:14px}
+.pack-box.ok{border-style:solid;border-color:#7bb88a;background:#f1faf3}
+.pack-opt{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}
+.pack-opt .btn.sm{padding:8px 14px;font-size:14px}
+.pack-tiers{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 8px}
+.pack-tiers>div{flex:1 1 130px;background:var(--cream);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column}
+.pack-tiers span{color:#2f7d46;font-size:13.5px;font-weight:600}
+.pack-box s,.pack-tiers s{color:var(--soft,#8a8290);font-size:13px;margin-right:6px}
+.pack-tiers s{margin:0}
+.line .tot .was{display:block;font-size:13px;font-weight:400;color:var(--soft,#8a8290)}
+.line .un s{margin-left:4px}

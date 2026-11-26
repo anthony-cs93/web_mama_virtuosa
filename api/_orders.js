@@ -46,6 +46,17 @@ export function evaluateCoupon(config, raw, sub) {
   return { code, type: c.type, value: c.value, min: c.min || 0, discount };
 }
 
+/* Descuento por paquetes de gomitas sueltas (las de «Pack x 2 / x 3» ya traen su precio): los grupos más grandes primero,
+   con las unidades más caras en cada grupo. Misma regla que el carrito (js/app.js). */
+const isLoose = p => p.cat === 'Gomitas saludables' && !(p.f && p.f.fee2y && p.f.fee2y.length);
+export function bundleDiscount(packs, units) {
+  const sorted = (packs || []).slice().sort((a, b) => b.n - a.n);
+  const prices = units.slice().sort((a, b) => b - a);
+  let disc = 0;
+  for (const pk of sorted) while (prices.length >= pk.n) disc += Math.max(0, prices.splice(0, pk.n).reduce((a, x) => a + x, 0) - pk.price);
+  return r2(disc);
+}
+
 /* ---------- armado del pedido (el servidor decide precios, envío, descuento y recargo) ---------- */
 export function buildOrder(store, b) {
   const { config, data } = store;
@@ -73,10 +84,12 @@ export function buildOrder(store, b) {
       if (!p.opt.values.includes(opt)) throw new Fail(`Elige ${String(p.opt.label || 'una opción').toLowerCase()} para «${p.name}»`);
     }
     const img = (p.imgs && p.imgs[0]) || p.img || '';
-    return { id: p.id, name: p.name, cat: p.cat, opt, optLabel: opt ? p.opt.label : '', qty, price: p.price, old: p.old > p.price ? p.old : 0, img };
+    return { id: p.id, name: p.name, cat: p.cat, loose: isLoose(p), opt, optLabel: opt ? p.opt.label : '', qty, price: p.price, old: p.old > p.price ? p.old : 0, img };
   });
   const sub = r2(items.reduce((a, i) => a + i.price * i.qty, 0));
   const regular = r2(items.reduce((a, i) => a + (i.old || i.price) * i.qty, 0));
+  const bundle = bundleDiscount(config.gomitaPacks, items.flatMap(i => i.loose ? Array(i.qty).fill(i.price) : []));
+  const net = r2(sub - bundle);
 
   /* entrega */
   const zone = (data.shipping || {})[b.ship];
@@ -96,7 +109,7 @@ export function buildOrder(store, b) {
     if (!address.distrito) throw new Fail('Indica tu distrito');
     if (address.dir.length < 5) throw new Fail(ship === 'prov' ? 'Indica la agencia o dirección de entrega' : 'Escribe tu dirección completa');
   }
-  const free = ship === 'lima' && config.freeShippingFrom > 0 && sub >= config.freeShippingFrom;
+  const free = ship === 'lima' && config.freeShippingFrom > 0 && net >= config.freeShippingFrom;
   const shipCost = free ? 0 : r2(ship === 'lima' ? distCost : ship === 'pick' ? 0 : Number(zone.p) || 0);
 
   /* pago */
@@ -106,9 +119,9 @@ export function buildOrder(store, b) {
 
   /* cupón */
   let coupon = null;
-  if (b.coupon) coupon = evaluateCoupon(config, b.coupon, sub);
+  if (b.coupon) coupon = evaluateCoupon(config, b.coupon, net);
   const disc = coupon ? coupon.discount : 0;
-  const base = r2(sub - disc + shipCost);
+  const base = r2(net - disc + shipCost);
   const surPct = method === 'card' ? (Number(pc.surcharge) || 0) : 0;
   const surcharge = surPct > 0 ? r2(base * surPct / 100) : 0;
   const total = r2(base + surcharge);
@@ -135,8 +148,8 @@ export function buildOrder(store, b) {
     history: [{ status: 'pending', at: now, note: 'Pedido creado' }],
     customer: { name, phone, email },
     delivery: { ship, label: ship === 'pick' ? 'Recojo en tienda' : zone.l, eta: zone.s || '', address },
-    items,
-    totals: { regular, savings: r2(regular - sub), sub, coupon: coupon ? coupon.code : '', disc, ship: shipCost, freeShip: free, surchargePct: surPct, surcharge, total },
+    items: items.map(({ loose, ...i }) => i),
+    totals: { regular, savings: r2(regular - sub), sub, bundle, coupon: coupon ? coupon.code : '', disc, ship: shipCost, freeShip: free, surchargePct: surPct, surcharge, total },
     pay: { method },
     doc, notes: txt(b.notes, 300), proof: null
   };
@@ -346,7 +359,7 @@ export async function notifyOwner(subject, o) {
   const html = `<h2>${esc(subject)} · ${esc(o.code)}</h2>
     <p><b>${esc(o.customer.name)}</b> · ${esc(o.customer.phone)}${o.customer.email ? ' · ' + esc(o.customer.email) : ''}</p>
     <ul>${rows}</ul>
-    <p>Envío: ${money(o.totals.ship)}${o.totals.disc ? ' · Cupón ' + esc(o.totals.coupon) + ': −' + money(o.totals.disc) : ''}${o.totals.surcharge ? ' · Recargo tarjeta: ' + money(o.totals.surcharge) : ''}<br><b>Total: ${money(o.totals.total)}</b> · Pago: ${esc(o.pay.method)}</p>
+    <p>${o.totals.bundle ? 'Pack de gomitas: −' + money(o.totals.bundle) + ' · ' : ''}Envío: ${money(o.totals.ship)}${o.totals.disc ? ' · Cupón ' + esc(o.totals.coupon) + ': −' + money(o.totals.disc) : ''}${o.totals.surcharge ? ' · Recargo tarjeta: ' + money(o.totals.surcharge) : ''}<br><b>Total: ${money(o.totals.total)}</b> · Pago: ${esc(o.pay.method)}</p>
     <p>${esc(o.delivery.label)}${o.delivery.ship !== 'pick' ? ': ' + esc([a.dir, a.distrito, a.prov, a.depto].filter(Boolean).join(', ')) : ''}</p>
     ${o.notes ? '<p>Nota: ' + esc(o.notes) + '</p>' : ''}${o.proof ? `<p><a href="${esc(o.proof.url)}">Ver comprobante</a></p>` : ''}`;
   try {

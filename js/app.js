@@ -39,14 +39,26 @@ let cart = store.get('mv_cart', []).filter(validLine).map(l => ({ id: l.id, opt:
 let coupon = store.get('mv_coupon', null);   // { code, type, value, min }: lo valida el servidor al aplicarlo y otra vez al confirmar
 if (!coupon || typeof coupon !== 'object') coupon = null;
 const saveCart = () => { store.set('mv_cart', cart); store.set('mv_coupon', coupon); updateCartCount(); };
-let nudgeTimer;
+/* El botón del carrito se anima mientras haya productos, hasta que se concrete la compra (o se vacíe el carrito) */
 function nudgeCart() {
   const b = $('.cart-btn'); if (!b) return;
-  clearTimeout(nudgeTimer); b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge');
-  nudgeTimer = setTimeout(() => b.classList.remove('nudge'), 6000);
+  b.classList.remove('nudge'); void b.offsetWidth; if (cart.length) b.classList.add('nudge');
 }
-$('.cart-btn').addEventListener('click', () => { clearTimeout(nudgeTimer); $('.cart-btn').classList.remove('nudge'); });
-function updateCartCount() { $('#cart-count').textContent = cart.reduce((a, l) => a + l.qty, 0); }
+function updateCartCount() {
+  $('#cart-count').textContent = cart.reduce((a, l) => a + l.qty, 0);
+  $('.cart-btn').classList.toggle('nudge', cart.length > 0);
+}
+/* Cuadro de confirmación (promesa: true si el usuario acepta) */
+function confirmBox(title, text, okLabel) {
+  const d = $('#confirm');
+  $('#confirm-t').textContent = title; $('#confirm-p').textContent = text; $('#confirm-ok').textContent = okLabel;
+  return new Promise(res => {
+    const done = ok => { d.removeEventListener('submit', onSubmit); d.removeEventListener('close', onClose); res(ok); };
+    const onSubmit = e => done(!!e.submitter && e.submitter.value === 'ok');
+    const onClose = () => done(false);   // Esc u otro cierre sin elegir
+    d.addEventListener('submit', onSubmit); d.addEventListener('close', onClose); d.showModal();
+  });
+}
 /* devuelve true si se llegó al máximo disponible */
 function addToCart(id, opt, qty) {
   const p = P(id), ex = cart.find(l => l.id === id && (l.opt || null) === (opt || null)), cap = maxQty(p);
@@ -89,15 +101,44 @@ function couponDisc(sub) {
   if (!coupon || (coupon.min && sub < coupon.min)) return 0;
   return r2(Math.min(sub, coupon.type === 'pct' ? sub * coupon.value / 100 : coupon.value));
 }
+/* Paquetes de gomitas sueltas (mezclando cualquiera): n unidades por un precio fijo. Misma regla que el servidor (api/_orders.js) */
+const PACKS = (C.gomitaPacks || []).slice().sort((a, b) => b.n - a.n);
+const isLoose = p => p.cat === 'Gomitas saludables' && !(p.f && p.f.fee2y && p.f.fee2y.length);
+const regPrice = p => (p.old > p.price ? p.old : p.price);
+const looseUnits = () => cart.flatMap(l => isLoose(P(l.id)) ? Array(l.qty).fill(P(l.id).price) : []);
+const looseRegular = () => cart.reduce((a, l) => a + (isLoose(P(l.id)) ? regPrice(P(l.id)) * l.qty : 0), 0);
+function packDisc(units) {
+  const prices = units.slice().sort((a, b) => b - a);
+  let disc = 0;
+  for (const pk of PACKS) while (prices.length >= pk.n) disc += Math.max(0, prices.splice(0, pk.n).reduce((a, x) => a + x, 0) - pk.price);
+  return r2(disc);
+}
+/* Qué le falta al cliente para completar un paquete: [{ add, n, price, reg, save }]
+   reg = precio de lista (antes) de todas las gomitas del paquete; save = reg − lo que pagaría por ellas */
+function packHints(units, unit) {
+  const top = PACKS.length ? PACKS[0].n : 0, have = units.length;
+  if (!top || !have || have % top === 0) return [];
+  const cur = packDisc(units), out = [];
+  const sum = a => a.reduce((x, y) => x + y, 0);
+  for (let k = 1; k < top; k++) {
+    const all = [...units, ...Array(k).fill(unit.price)];
+    const pk = PACKS.find(x => x.n === have % top + k);   // completa el paquete en curso
+    if (!pk || packDisc(all) <= cur) continue;
+    const reg = r2(looseRegular() + unit.reg * k);
+    out.push({ add: k, n: pk.n, price: pk.price, reg, save: r2(reg - (sum(all) - packDisc(all))), total: have + k });
+  }
+  return out;
+}
 function totals(ship, pay) {
   const sub = r2(cart.reduce((a, l) => a + P(l.id).price * l.qty, 0));
+  const bundle = packDisc(looseUnits()), net = r2(sub - bundle);
   const regular = r2(cart.reduce((a, l) => { const p = P(l.id); return a + (p.old > p.price ? p.old : p.price) * l.qty; }, 0));
   const count = cart.reduce((a, l) => a + l.qty, 0);
-  const disc = couponDisc(sub);
-  const shRaw = ship ? shipCost(sub, ship) : 0, sh = shRaw === null ? 0 : shRaw;
-  const base = r2(sub - disc + sh);
+  const disc = couponDisc(net);
+  const shRaw = ship ? shipCost(net, ship) : 0, sh = shRaw === null ? 0 : shRaw;
+  const base = r2(net - disc + sh);
   const sur = pay === 'card' && surchargePct() > 0 ? r2(base * surchargePct() / 100) : 0;
-  return { sub, regular, savings: r2(regular - sub), count, disc, sh, shPending: shRaw === null, sur, total: r2(base + sur) };
+  return { sub, bundle, net, regular, savings: r2(regular - sub), count, disc, sh, shPending: shRaw === null, sur, total: r2(base + sur) };
 }
 async function shopApi(url, body) {
   let r;
@@ -111,7 +152,7 @@ async function applyCoupon(raw) {
   const code = raw.trim().toUpperCase();
   if (!code) { coupon = null; ui.couponMsg = null; saveCart(); return; }
   try {
-    const r = (await shopApi('/api/orders?op=coupon', { code, subtotal: totals().sub })).coupon;
+    const r = (await shopApi('/api/orders?op=coupon', { code, subtotal: totals().net })).coupon;
     coupon = { code: r.code, type: r.type, value: r.value, min: r.min };
     ui.couponMsg = { ok: true, t: `Cupón ${r.code} aplicado: ${couponLabel(coupon)}` };
   } catch (e) { coupon = null; ui.couponMsg = { ok: false, t: e.message }; }
@@ -376,6 +417,15 @@ function pageSearch(q) {
   return listPage({ title: 'Resultados para “' + q + '”', crumbList: [['Inicio', '#/'], ['Búsqueda']], base });
 }
 
+/* Oferta de paquetes en la página de una gomita suelta */
+function packOffer(p) {
+  if (!isLoose(p) || !PACKS.length) return '';
+  const have = looseUnits().length;
+  return `<div class="pack-box"><b>Arma tu paquete de gomitas</b>
+    <div class="pack-tiers">${PACKS.slice().sort((a, b) => a.n - b.n).map(k => `<div><b>${k.n} und x ${fmt(k.price)}</b><s>${fmt(r2(regPrice(p) * k.n))}</s><span>ahorras ${fmt(r2(regPrice(p) * k.n - k.price))}</span></div>`).join('')}</div>
+    <p>Mezcla las que quieras, iguales o distintas.${have ? ` Ya tienes ${have} en tu carrito.` : ''}</p></div>`;
+}
+
 /* ---------- producto ---------- */
 function pageProduct(id) {
   const p = P(+id); if (!p) return pageNotFound();
@@ -403,6 +453,7 @@ function pageProduct(id) {
       <div class="muted" style="font-size:14px">Paga con ${esc(payNames())}.</div>
       ${p.opt ? `<div><div class="opt-head"><span>${esc(p.opt.label)}</span>${p.opt.label === 'Talla' ? '<button class="link ul" data-act="toast" data-msg="La guía de tallas estará disponible pronto">Guía de tallas</button>' : ''}</div>
         <div class="opts" role="group" aria-label="${esc(p.opt.label)}">${p.opt.values.map(v => `<button class="opt" data-act="pdp-opt" data-v="${esc(v)}" aria-pressed="false">${esc(v)}</button>`).join('')}</div></div>` : ''}
+      ${packOffer(p)}
       <div class="buy-row desk">${qtyCtl()}<button class="btn" data-act="pdp-add">Agregar al carrito</button></div>
       <button class="btn ghost" data-act="pdp-buy">Comprar ahora</button>
       <button class="btn wa" data-act="wa" data-msg="${esc('Hola Angie, me interesa: ' + p.name)}">💬 Consultar por WhatsApp</button>
@@ -451,12 +502,25 @@ function lineLabel(l) { const p = P(l.id); return l.opt ? `${p.opt ? p.opt.label
 const payLine = () => `🔒 Paga con ${payNames()}`;
 const couponBox = () => `<form class="coupon" data-form="coupon"><input name="code" placeholder="Cupón de descuento" aria-label="Cupón de descuento" autocomplete="off" value="${esc(coupon ? coupon.code : '')}"><button type="submit">Aplicar</button></form>
     ${ui.couponMsg ? `<div class="coupon-msg ${ui.couponMsg.ok ? 'ok' : 'bad'}" role="status">${esc(ui.couponMsg.t)}</div>` : ''}
-    ${coupon && coupon.min && totals().sub < coupon.min ? `<div class="coupon-msg bad" role="status">El cupón ${esc(coupon.code)} aplica desde ${fmt(coupon.min)} en productos.</div>` : ''}`;
+    ${coupon && coupon.min && totals().net < coupon.min ? `<div class="coupon-msg bad" role="status">El cupón ${esc(coupon.code)} aplica desde ${fmt(coupon.min)} en productos.</div>` : ''}`;
+/* Sugerencia para completar el paquete de gomitas (carrito) */
+function packBanner() {
+  if (!PACKS.length) return '';
+  const lines = cart.filter(l => isLoose(P(l.id)));
+  if (!lines.length) return '';
+  const last = lines[lines.length - 1], have = looseUnits().length, hints = packHints(looseUnits(), { price: P(last.id).price, reg: regPrice(P(last.id)) });
+  const bundle = packDisc(looseUnits());
+  if (!hints.length) return bundle ? `<div class="pack-box ok" role="status"><b>¡Paquete de gomitas aplicado!</b> Ahorras ${fmt(bundle)} en tus ${have} gomitas.</div>` : '';
+  return `<div class="pack-box" role="status"><b>Completa tu paquete de gomitas</b>
+    <p>Mezcla las que quieras, iguales o distintas${bundle ? ` · ya ahorras ${fmt(bundle)}` : ''}.</p>
+    ${hints.map(h => `<div class="pack-opt"><span>Agrega ${h.add} más: ${h.total} und${h.total === h.n ? ` x ${fmt(h.price)}` : ''} <s>${fmt(h.reg)}</s> · <b>ahorras ${fmt(h.save)}</b></span><button type="button" class="btn sm" data-act="pack-add" data-id="${last.id}" data-opt="${esc(last.opt || '')}" data-n="${h.add}">Agregar ${h.add} igual${h.add > 1 ? 'es' : ''}</button></div>`).join('')}
+    <a class="link" href="${catHref('Gomitas saludables')}">Elegir otras gomitas →</a></div>`;
+}
 function cartView() {
   const t = totals();
   const free = C.freeShippingFrom > 0 && shipOn('lima');
-  const need = Math.max(0, C.freeShippingFrom - t.sub);
-  const pct = Math.min(100, t.sub / (C.freeShippingFrom || 1) * 100).toFixed(0);
+  const need = Math.max(0, C.freeShippingFrom - t.net);
+  const pct = Math.min(100, t.net / (C.freeShippingFrom || 1) * 100).toFixed(0);
   let body;
   if (!cart.length) {
     body = `<div class="empty-cart"><div class="script">Tu carrito está vacío</div><a class="btn" href="#/">Seguir comprando</a></div>`;
@@ -464,22 +528,25 @@ function cartView() {
     body = `<div class="cart-grid">
   <div>
     ${free ? `<div class="free-bar" role="status">${need > 0 ? `Te faltan <b>${fmt(need)}</b> para envío gratis en Lima` : '¡Tienes envío gratis en Lima!'}<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>` : ''}
+    ${packBanner()}
     <div class="lines">${cart.map((l, i) => { const p = P(l.id), cap = maxQty(p); return `<div class="line">
       <div class="ph${pics(p)[0] ? ' has-img' : ''}" style="background:${p.tone}">${pics(p)[0] ? `<img src="${esc(pics(p)[0])}" alt="">` : ''}</div>
-      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u</div>
+      <div><a class="nm" href="#/producto/${p.id}" style="color:inherit">${esc(p.name)}</a><div class="un">${esc(lineLabel(l))} · ${fmt(p.price)} c/u${p.old > p.price ? ` <s>${fmt(p.old)}</s>` : ''}</div>
         <button class="link ul" data-act="line-rm" data-i="${i}">Quitar</button></div>
       <div class="qty sm"><button data-act="line-qty" data-i="${i}" data-d="-1" aria-label="Menos" ${l.qty <= 1 ? 'disabled' : ''}>–</button><b>${l.qty}</b><button data-act="line-qty" data-i="${i}" data-d="1" aria-label="Más" ${l.qty >= cap ? 'disabled' : ''}>+</button></div>
-      <div class="tot">${fmt(p.price * l.qty)}</div></div>`; }).join('')}</div>
+      <div class="tot">${p.old > p.price ? `<s class="was">${fmt(p.old * l.qty)}</s>` : ''}${fmt(p.price * l.qty)}</div></div>`; }).join('')}</div>
     <a class="link" href="#/" style="display:inline-block;margin-top:18px">← Seguir comprando</a>
   </div>
   <aside class="summary" aria-label="Resumen">
     <h2>Resumen</h2>
     ${couponBox()}
+    ${t.savings ? `<div class="srow muted"><span>Precio regular</span><s>${fmt(t.regular)}</s></div>` : ''}
     <div class="srow"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
-    ${t.savings ? `<div class="srow disc"><span>Ya ahorras en ofertas</span><span>${fmt(t.savings)}</span></div>` : ''}
+    ${t.bundle ? `<div class="srow disc"><span>Paquete de gomitas</span><span>− ${fmt(t.bundle)}</span></div>` : ''}
     ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon.code)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
     <div class="srow"><span>Envío</span><span class="muted">se calcula al pagar</span></div>
     <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
+    ${t.savings + t.bundle + t.disc > 0 ? `<div class="save-note">¡Ahorras ${fmt(r2(t.savings + t.bundle + t.disc))} en esta compra!</div>` : ''}
     <a class="btn block" href="#/checkout">Finalizar compra</a>
     <div class="safe">${esc(payLine())}</div>
   </aside>
@@ -566,11 +633,12 @@ function summaryHTML(inner) {
     ${couponBox()}
     ${t.savings ? `<div class="srow muted" style="border-top:1px solid var(--line);padding-top:12px"><span>Precio regular</span><s>${fmt(t.regular)}</s></div>` : ''}
     <div class="srow"${t.savings ? '' : ' style="border-top:1px solid var(--line);padding-top:12px"'}><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
+    ${t.bundle ? `<div class="srow disc"><span>Paquete de gomitas</span><span>− ${fmt(t.bundle)}</span></div>` : ''}
     ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(coupon.code)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
     <div class="srow"><span>Envío</span><span>${t.shPending ? '<span class="muted">Elige tu distrito</span>' : t.sh === 0 ? 'Gratis' : fmt(t.sh)}</span></div>
     ${t.sur ? `<div class="srow"><span>Recargo tarjeta (${surchargePct()}%)</span><span>${fmt(t.sur)}</span></div>` : ''}
     <div class="srow total"><span>Total</span><span>${fmt(t.total)}</span></div>
-    ${t.savings + t.disc > 0 ? `<div class="save-note">¡Ahorras ${fmt(r2(t.savings + t.disc))} en esta compra!</div>` : ''}
+    ${t.savings + t.bundle + t.disc > 0 ? `<div class="save-note">¡Ahorras ${fmt(r2(t.savings + t.bundle + t.disc))} en esta compra!</div>` : ''}
     <div class="safe">${esc(payLine())}</div>`;
 }
 function checkoutView() {
@@ -578,7 +646,7 @@ function checkoutView() {
   const minLima = sendable().length ? Math.min(...sendable().map(d => d.cost)) : 0;
   if (!shipOn(st.ship)) st.ship = shipKeys()[0] || st.ship;
   const shipEntries = shipKeys().map(k => {
-    const o = D.shipping[k], c = shipCost(t.sub, k);
+    const o = D.shipping[k], c = shipCost(t.net, k);
     if (k === 'pick') return { k, l: PICKUP.l, s: PICKUP.addr, price: 'Gratis' };
     return { k, l: o.l, s: o.s, price: c === 0 ? 'Gratis' : c === null ? 'Desde ' + money0(minLima) : fmt(c) };
   });
@@ -717,6 +785,7 @@ function orderHTML(o, fresh) {
     <aside class="summary" aria-label="Resumen del pedido"><h2>Resumen</h2>
       ${o.items.map(i => `<div class="sum-line"><div class="ph${i.img ? ' has-img' : ''}">${i.img ? `<img src="${esc(i.img)}" alt="">` : ''}</div><div class="t"><b>${esc(i.name)}</b><br><span class="muted">${i.opt ? esc(i.opt) + ' · ' : ''}Cant. ${i.qty}</span></div><b>${fmt(i.price * i.qty)}</b></div>`).join('')}
       <div class="srow" style="border-top:1px solid var(--line);padding-top:12px"><span>Subtotal</span><span>${fmt(t.sub)}</span></div>
+      ${t.bundle ? `<div class="srow disc"><span>Paquete de gomitas</span><span>− ${fmt(t.bundle)}</span></div>` : ''}
       ${t.disc ? `<div class="srow disc"><span>Cupón ${esc(t.coupon)}</span><span>− ${fmt(t.disc)}</span></div>` : ''}
       <div class="srow"><span>Envío</span><span>${t.ship === 0 ? 'Gratis' : fmt(t.ship)}</span></div>
       ${t.surcharge ? `<div class="srow"><span>Recargo tarjeta (${t.surchargePct}%)</span><span>${fmt(t.surcharge)}</span></div>` : ''}
@@ -985,9 +1054,21 @@ const actions = {
     nudgeCart();
     toast(capped ? 'Agregado. Es el máximo disponible de este producto' : '✓ Agregado al carrito', { href: '#/carrito', label: 'Ver carrito' });
   },
+  'pack-add'(el) {
+    const id = +el.dataset.id, n = +el.dataset.n || 1;
+    if (!P(id)) return;
+    const capped = addToCart(id, el.dataset.opt || null, n);
+    render(true);
+    if (capped) toast('Llegaste al máximo disponible de este producto');
+  },
   'pdp-buy'() { addToCart(currentProductId(), ui.pdp.opt, ui.pdp.qty); location.hash = '#/checkout'; },
   'line-qty'(el) { const l = cart[+el.dataset.i], p = P(l.id); l.qty = Math.max(1, Math.min(maxQty(p), l.qty + (+el.dataset.d))); saveCart(); rerenderKeepFocus(); },
-  'line-rm'(el) { cart.splice(+el.dataset.i, 1); saveCart(); render(true); },
+  async 'line-rm'(el) {
+    const l = cart[+el.dataset.i]; if (!l) return;
+    if (!await confirmBox('¿Quitar este producto?', `${P(l.id).name} saldrá de tu carrito.`, 'Sí, quitar')) return;
+    const i = cart.indexOf(l); if (i < 0) return;
+    cart.splice(i, 1); saveCart(); render(true);
+  },
   'pick-ship'(el) {
     ui.co.ship = el.dataset.k;
     ui.co.err = {}; rerenderKeepFocus();

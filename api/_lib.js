@@ -159,6 +159,14 @@ export function normCoupons(src) {
   }
   return out;
 }
+/* Paquetes de gomitas (mezclando cualquier gomita suelta): n unidades por un precio fijo */
+export const PACKS_DEFAULT = [{ n: 2, price: 75 }, { n: 3, price: 100 }];
+function normPacks(v) {
+  const src = Array.isArray(v) ? v : PACKS_DEFAULT;
+  const out = src.map(x => ({ n: Math.floor(Number(x && x.n)), price: Math.round(Number(x && x.price) * 100) / 100 }))
+    .filter(x => x.n >= 2 && x.n <= 10 && x.price > 0);
+  return out.length || Array.isArray(v) ? out : PACKS_DEFAULT;
+}
 export function migrateConfig(store) {
   const c = store && store.config;
   if (!c || typeof c !== 'object') return store;
@@ -174,6 +182,7 @@ export function migrateConfig(store) {
   }
   c.pay = pay;
   c.coupons = normCoupons(c.coupons);
+  c.gomitaPacks = normPacks(c.gomitaPacks);
   if (store.data && typeof store.data === 'object') {
     store.data.districts = normDistricts(store.data.districts);
     for (const z of Object.values(store.data.shipping || {})) if (z && typeof z === 'object') z.on = z.on !== false;
