@@ -184,6 +184,14 @@ const card = (p, withCat) => `<div class="card-wrap"><a class="card" href="#/pro
 
 const crumbs = list => `<nav class="crumbs" aria-label="Ruta">${list.map(([l, h]) => h ? `<a href="${h}">${esc(l)}</a>` : `<span aria-current="page">${esc(l)}</span>`).join(' › ')}</nav>`;
 
+/* Iconos de línea (24×24) de la portada */
+const svgIco = d => `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  truck: svgIco('<path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h4l3 3.2v2.8h-7"/><circle cx="7" cy="17" r="1.9"/><circle cx="17" cy="17" r="1.9"/>'),
+  shield: svgIco('<path d="M12 3 5 5.8v5.4c0 4.4 2.9 8.1 7 9.8 4.1-1.7 7-5.4 7-9.8V5.8z"/><path d="m8.8 12.2 2.3 2.3 4.2-4.7"/>'),
+  mic: svgIco('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/>')
+};
+
 /* Iconos de categoría (trazo, 48×48) */
 const CAT_ICONS = {
   'Belleza': 'img/cat/belleza.png',
@@ -215,7 +223,7 @@ const SOON = C.podcastSoon !== false;   // Podcast "Próximamente"; poner podcas
 const isPodcastLink = l => /^#\/podcast/.test(l || '');
 const SOON_TAG = '<small class="soon-tag">Próximamente</small>';
 const safeLink = l => (/^(#|\/|https?:\/\/)/.test(l || '') ? l : '#/');
-const heroBtn = (b, cls) => b && b.label && SOON && isPodcastLink(b.link) ? `<span class="btn${cls} soon" aria-disabled="true">🎙 Podcast ${SOON_TAG}</span>` : b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
+const heroBtn = (b, cls) => b && b.label && SOON && (isPodcastLink(b.link) || /podcast/i.test(b.label)) ? `<span class="btn${cls} soon hover-soon" aria-disabled="true"><span class="a">${esc(b.label)}</span><span class="b">Próximamente</span></span>` : b && b.label ? `<a class="btn${cls}" href="${esc(safeLink(b.link))}"${/^https?:/.test(b.link || '') ? ' target="_blank" rel="noopener"' : ''}>${esc(b.label)}</a>` : '';
 /* Título de la portada: variante de escritorio y, si existe, una de celular (≤900 px). Cada una con su salto de línea y su tamaño (px) */
 const heroTitle = (t, cls) => `<span class="${cls}${/\n/.test(t) ? ' has-br' : ''}">${esc(t).replace(/\r?\n/g, '<br>')}</span>`;
 const px = (v, lo, hi) => { const n = Math.round(+v); return n >= lo && n <= hi ? n : 0; };
@@ -256,7 +264,7 @@ function pageHome() {
     title: 'Mamá Virtuosa by Angie · Belleza, niños, ropa y gomitas',
     html: `
 ${heroHTML()}
-<div class="trust"><div>🚚 Envíos a todo el Perú</div><div>🔒 Pagos seguros</div></div>
+<div class="trust"><div>${ICON.truck}Envíos a todo el Perú</div><div>${ICON.shield}Pagos seguros</div></div>
 <section class="section" aria-labelledby="h-cat">
   <h2 class="sec-title" id="h-cat">Compra por categoría</h2>
   <div class="cat-grid">${D.catOrder.map(c => `<a class="cat-card" href="${catHref(c)}">
@@ -271,7 +279,7 @@ ${D.catOrder.includes('Ropa infantil') ? bandSection('Ropa infantil', 'rop', 'Ro
   <div class="prod-grid">${best.map(p => card(p, true)).join('')}</div>
 </section>
 <section class="podcast-band" aria-labelledby="h-pod">
-  <div class="ph cover"><span aria-hidden="true">${SOON ? 'Próximamente' : '[portada podcast]'}</span></div>
+  <div class="ph cover">${SOON ? `<span class="mic-ico" role="img" aria-label="Podcast, próximamente">${ICON.mic}</span>` : '<span aria-hidden="true">[portada podcast]</span>'}</div>
   <div>
     <div class="eyebrow">Podcast Mamá Virtuosa</div>
     ${SOON ? `<h2 id="h-pod">Próximamente</h2><p class="soon-note">Estamos preparando los primeros episodios. ¡Muy pronto podrás escucharlos aquí!</p>` : `<h2 id="h-pod">Últimos episodios</h2>

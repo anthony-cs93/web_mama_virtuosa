@@ -130,9 +130,9 @@ main{flex:1;outline:none}
 .banner-txt .muted{font-size:14px}
 .prod-grid{display:grid;gap:24px;grid-template-columns:repeat(4,1fr)}
 .prod-grid.three{grid-template-columns:repeat(3,1fr)}
-.card:hover{color:inherit}
 .card{display:block;color:inherit;text-align:left}
 .card .ph{height:auto;aspect-ratio:1/1;border-radius:14px;transition:transform .25s}
+.card:hover{color:inherit}
 .three .card .ph{height:auto}
 .card:hover .ph{transform:translateY(-3px)}
 .card .tag{position:absolute;top:10px;left:10px;background:#fff;border-radius:999px;padding:3px 10px;font:600 12px var(--sans);color:var(--ink)}
@@ -632,3 +632,15 @@ main{flex:1;outline:none}
   .gom-band .band-top .sec-title{font-size:clamp(44px,4.6vw,72px);line-height:1.05}
   .gom-band .band-top .gom-banner{margin:0}
 }
+
+/* botón «Escuchar podcast»: al pasar el mouse dice Próximamente */
+.btn.hover-soon{display:inline-grid;cursor:not-allowed;border:1.5px solid var(--ink);color:var(--ink);padding:13px 26px;background:rgba(255,255,255,.55);opacity:.8}
+.btn.hover-soon:hover{background:rgba(255,255,255,.55);color:var(--ink)}
+.hover-soon>span{grid-area:1/1;text-align:center;transition:opacity .18s}
+.hover-soon .b{opacity:0}
+.hover-soon:hover .a{opacity:0}
+.hover-soon:hover .b{opacity:1}
+/* portada: iconos de línea */
+.trust>div{display:flex;align-items:center;justify-content:center;gap:10px}
+.trust svg{width:24px;height:24px;flex:none;color:var(--plum)}
+.mic-ico svg{width:64px;height:64px;stroke-width:1.3}
