@@ -5,6 +5,10 @@ export default async function handler(req, res) {
   try {
     const { store } = await readStore();
     const { coupons, ...config } = store.config; // los cupones no son públicos: se validan en el servidor
+    // solo se publica el código del cupón anunciado en la franja superior, y solo si sigue activo y vigente
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    const promo = Object.entries(coupons || {}).find(([, c]) => c.promo && c.active !== false && (!c.expires || c.expires >= today));
+    config.promoCoupon = promo ? promo[0] : '';
     res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
     // El navegador siempre revisa; solo el CDN de Vercel guarda la copia unos segundos
     res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');

@@ -903,7 +903,7 @@ function renderSettings() {
         <p class="muted small" style="margin:0">El cliente confirma su pedido y tú le envías el link de pago (Izipay, Mercado Pago, etc.) por WhatsApp. Con 0 no se cobra recargo.</p></div>
     </div></div>
   <div class="card"><h2>Cupones</h2>
-    <p class="muted small" style="margin:-6px 0 14px">Los cupones no se publican en la tienda: se validan en el servidor. El descuento se aplica solo a los productos, no al envío.</p>
+    <p class="muted small" style="margin:-6px 0 14px">Los cupones se validan en el servidor. El descuento se aplica solo a los productos, no al envío. El cupón marcado «Mostrar en la franja superior» se anuncia arriba de la tienda junto al envío gratis; si está inactivo o vencido, deja de mostrarse solo. Desactiva un cupón con «Activo».</p>
     <div class="stack" id="coupons">${Object.entries(c.coupons).map(([code, cp]) => couponRow(code, cp)).join('')}</div>
     <div style="margin-top:12px"><button type="button" class="link" data-act="s-coupon">+ Agregar cupón</button></div></div>
   <div class="card"><h2>Páginas de ayuda</h2><div class="stack">${Object.entries(d.help).map(([k, h]) => `
@@ -918,6 +918,7 @@ const couponRow = (code, c) => `<div class="coupon-row" data-coupon>
   <label class="fld"><span>Compra mínima (S/)</span><input type="number" min="0" step="1" data-cp="min" value="${c.min || 0}"></label>
   <label class="fld"><span>Vence <small>(vacío = no vence)</small></span><input type="date" data-cp="expires" value="${esc(c.expires || '')}"></label>
   <label class="chk-on"><input type="checkbox" data-cp="active"${c.active !== false ? ' checked' : ''}> Activo</label>
+  <label class="chk-on"><input type="checkbox" data-cp="promo"${c.promo ? ' checked' : ''}> Mostrar en la franja superior de la tienda</label>
   <button type="button" class="link red" data-act="s-cprm">Quitar</button></div>`;
 function setClick(b, act) {
   if (act === 's-coupon') { $('#coupons').insertAdjacentHTML('beforeend', couponRow('', { type: 'pct', value: 10, min: 0, expires: '', active: true })); $('#coupons [data-coupon]:last-child input').focus(); }
@@ -928,7 +929,7 @@ function readCoupons() {
   const out = {};
   $$('#coupons [data-coupon]').forEach(r => {
     const g = k => $(`[data-cp=${k}]`, r), code = g('code').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, ''), type = g('type').value, value = parseFloat(g('value').value);
-    if (code && value > 0 && (type === 'amt' || value <= 90)) out[code] = { type, value: type === 'pct' ? Math.round(value) : Math.round(value * 100) / 100, min: Math.max(0, parseFloat(g('min').value) || 0), expires: g('expires').value || '', active: g('active').checked };
+    if (code && value > 0 && (type === 'amt' || value <= 90)) out[code] = { type, value: type === 'pct' ? Math.round(value) : Math.round(value * 100) / 100, min: Math.max(0, parseFloat(g('min').value) || 0), expires: g('expires').value || '', active: g('active').checked, promo: g('promo').checked };
   });
   S.config.coupons = out; markDirty();
 }
@@ -939,6 +940,7 @@ view.addEventListener('change', async e => {
 });
 view.addEventListener('input', e => {
   const t = e.target;
+  if (t.dataset.cp === 'promo' && t.checked) $$('#coupons [data-cp=promo]').forEach(x => { if (x !== t) x.checked = false; });   // solo un cupón en la franja
   if (t.dataset.cp) return readCoupons();
   const path = t.dataset.bind; if (!path) return;
   const keys = path.split('.'), last = keys.pop();

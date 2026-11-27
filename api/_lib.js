@@ -146,6 +146,8 @@ export function normDistricts(src) {
 /* Cupones: { CÓDIGO: { type: 'pct' | 'amt', value, min, expires: 'AAAA-MM-DD' | '', active } }. El formato antiguo era { CÓDIGO: 0.1 } */
 export function normCoupons(src) {
   const out = {};
+  /* «promo»: el cupón que se anuncia en la franja superior (solo uno). Si ninguno lo define aún, se mantiene BIENVENIDA10 */
+  const anyPromo = Object.values(src || {}).some(v => v && typeof v === 'object' && 'promo' in v);
   for (const [code, v] of Object.entries(src || {})) {
     const c = String(code).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24);
     if (!c) continue;
@@ -155,8 +157,10 @@ export function normCoupons(src) {
     const n = Number(v.value) || 0;
     const value = type === 'pct' ? Math.min(90, Math.round(n)) : Math.round(n * 100) / 100;
     if (value <= 0) continue;
-    out[c] = { type, value, min: Math.max(0, Number(v.min) || 0), expires: /^\d{4}-\d{2}-\d{2}$/.test(v.expires || '') ? v.expires : '', active: v.active !== false };
+    out[c] = { type, value, min: Math.max(0, Number(v.min) || 0), expires: /^\d{4}-\d{2}-\d{2}$/.test(v.expires || '') ? v.expires : '', active: v.active !== false, promo: v.promo === true || (!anyPromo && c === 'BIENVENIDA10') };
   }
+  let seen = false;
+  for (const v of Object.values(out)) { if (v.promo && seen) v.promo = false; if (v.promo) seen = true; }
   return out;
 }
 /* Paquetes de gomitas (mezclando cualquier gomita suelta): n unidades por un precio fijo */

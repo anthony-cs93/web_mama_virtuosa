@@ -26,6 +26,15 @@ function toast(msg, link) {
   t.classList.toggle('has-link', !!link); t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), link ? 4500 : 2600);
 }
+/* Franja superior: envío gratis (monto del panel) y el cupón anunciado, si sigue activo */
+function buildPromo() {
+  const el = $('#promo'); if (!el) return;
+  const parts = [];
+  const lima = D.shipping && D.shipping.lima;
+  if (C.freeShippingFrom > 0 && lima && lima.on !== false) parts.push(`Envío gratis en Lima desde S/ ${C.freeShippingFrom}`);
+  if (C.promoCoupon) parts.push(`Cupón <b>${esc(C.promoCoupon)}</b>`);
+  el.innerHTML = parts.join(' · '); el.hidden = !parts.length;
+}
 function waLink(msg) {
   /* el mensaje inicial guardado en el panel puede traer un nombre propio: nunca se menciona a Angie */
   const text = String(msg || C.whatsappMsg || '').replace(/Hola,?\s+Angie[,!.]?/gi, 'Hola,').replace(/Angie/g, '').replace(/ {2,}/g, ' ').trim();
@@ -208,7 +217,10 @@ const CAT_BANNERS = {
   'Belleza': ['img/banner_belleza.jpg', 'Maquillaje: labiales, brochas, rubor y esmalte de uñas sobre fondo rosa'],
   'Ropa infantil': ['img/banner_hurray.jpg', 'Bebé sonriendo con un saco de dormir Hurray']
 };
-const catBanner = (c, linked, inner = '') => { const b = CAT_BANNERS[c]; if (!b) return ''; const img = `<img src="${b[0]}" width="2000" height="667" alt="${esc(b[1])}" loading="lazy">`; return linked ? `<a class="gom-banner" href="${catHref(c)}">${img}</a>` : `<div class="gom-banner strip">${img}${inner}</div>`; };
+/* Distintivo sobre el banner de la página de la categoría */
+const CAT_BADGES = { 'Gomitas saludables': 'Distribuidor autorizado de SOTTCOR LABS' };
+const catBadge = c => CAT_BADGES[c] ? `<div class="banner-badge"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 5.8v5.4c0 4.4 2.9 8.1 7 9.8 4.1-1.7 7-5.4 7-9.8V5.8z"/><path d="m8.8 12.2 2.3 2.3 4.2-4.7"/></svg><span>${esc(CAT_BADGES[c])}</span></div>` : '';
+const catBanner = (c, linked, inner = '') => { const b = CAT_BANNERS[c]; if (!b) return ''; const img = `<img src="${b[0]}" width="2000" height="667" alt="${esc(b[1])}" loading="lazy">`; return linked ? `<a class="gom-banner" href="${catHref(c)}">${img}</a>` : `<div class="gom-banner strip">${img}${inner}${catBadge(c)}</div>`; };
 const catIcon = c => { const u = CAT_ICONS[c] || CAT_ICON_DEFAULT; return `<span class="cat-ico" style="-webkit-mask-image:url(${u});mask-image:url(${u})" aria-hidden="true"></span>`; };
 
 /* ---------- hero (portada) y campañas de temporada ---------- */
@@ -1175,5 +1187,5 @@ $('#year').textContent = new Date().getFullYear();
 buildNav(); buildDrawer();
 { const ig = $('#ig-link'), u = C.social && C.social.Instagram; if (ig && /^https?:\/\//.test(u || '')) ig.href = u.replace(/\/$/, ''); }
 if (SOON) { const f = $('.foot-podcast'); if (f) f.outerHTML = `<span class="soon" aria-disabled="true">Podcast ${SOON_TAG}</span>`; } if (/^#\//.test(location.hash)) history.replaceState(null, '', location.hash.slice(1));   // enlaces antiguos con #
-updateCartCount(); render();
+buildPromo(); updateCartCount(); render();
 })();
