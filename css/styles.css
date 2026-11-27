@@ -99,7 +99,7 @@ main{flex:1;outline:none}
 .promo-card .sub{font-size:14px;color:var(--muted)}
 
 /* ---------- inicio ---------- */
-.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);background:linear-gradient(115deg,#fcfcc8 0%,#f8dcc6 16%,#fbbad9 34%,#c8befa 55%,#c8fcf4 76%,#ccfcc8 100%);min-height:420px}
+.hero{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);background:linear-gradient(115deg,#fcfcc8 0%,#f8dcc6 16%,#fbbad9 34%,#c8befa 55%,#c8fcf4 76%,#ccfcc8 100%);min-height:420px}
 .hero-txt{padding:56px 32px 56px var(--px);display:flex;flex-direction:column;justify-content:center;gap:20px}
 .hero h1{font:400 var(--ts-d,clamp(52px,7vw,80px))/1 var(--script);letter-spacing:-1px;margin:0}
 .hero h1 .t-m{display:none}
